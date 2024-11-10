@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.3.4">Jekyll</generator><link href="/feed.xml" rel="self" type="application/atom+xml" /><link href="/" rel="alternate" type="text/html" /><updated>2024-11-10T22:36:06+08:00</updated><id>/feed.xml</id><title type="html">desong的博客</title><subtitle>Write an awesome description for your new site here. You can edit this line in _config.yml. It will appear in your document head meta (for Google search results) and in your feed.xml site description.</subtitle><author><name>desong</name></author><entry><title type="html">分布式发布订阅系统的设计与实现（二）</title><link href="/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%BA%8C.html" rel="alternate" type="text/html" title="分布式发布订阅系统的设计与实现（二）" /><published>2024-09-30T00:00:00+08:00</published><updated>2024-09-30T00:00:00+08:00</updated><id>/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%EF%BC%88%E4%BA%8C%EF%BC%89</id><content type="html" xml:base="/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%BA%8C.html"><![CDATA[<h2 id="系统架构概述">系统架构概述</h2>
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.3.4">Jekyll</generator><link href="https://moo611.github.io/feed.xml" rel="self" type="application/atom+xml" /><link href="https://moo611.github.io/" rel="alternate" type="text/html" /><updated>2024-11-10T22:59:48+08:00</updated><id>https://moo611.github.io/feed.xml</id><title type="html">desong的博客</title><subtitle>Write an awesome description for your new site here. You can edit this line in _config.yml. It will appear in your document head meta (for Google search results) and in your feed.xml site description.</subtitle><author><name>desong</name></author><entry><title type="html">分布式发布订阅系统的设计与实现（二）</title><link href="https://moo611.github.io/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%BA%8C.html" rel="alternate" type="text/html" title="分布式发布订阅系统的设计与实现（二）" /><published>2024-09-30T00:00:00+08:00</published><updated>2024-09-30T00:00:00+08:00</updated><id>https://moo611.github.io/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%EF%BC%88%E4%BA%8C%EF%BC%89</id><content type="html" xml:base="https://moo611.github.io/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%BA%8C.html"><![CDATA[<h2 id="系统架构概述">系统架构概述</h2>
 
 <p>在单节点环境下，代理（broker）负责协调发布者和订阅者的交互，存储消息并负责将消息推送给已订阅的客户端。整体流程如下：</p>
 
@@ -689,8 +689,8 @@
 <h2 id="测试">测试</h2>
 
 <p>依次启动代理、订阅者和发布者。先由发布者创建主题，订阅者订阅主题，然后发布者发布消息，订阅者成功接收到消息。这样，单节点下的发布者订阅者功能已经实现。我们将在下一篇实现多节点下的发布订阅系统。
-<img src="../assets/images/ss1.jpg" alt="图1" />
-<img src="../assets/images/ss2.jpg" alt="图2" /></p>]]></content><author><name>desong</name></author><summary type="html"><![CDATA[系统架构概述]]></summary></entry><entry><title type="html">分布式发布订阅系统的设计与实现（一）</title><link href="/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%B8%80.html" rel="alternate" type="text/html" title="分布式发布订阅系统的设计与实现（一）" /><published>2024-09-30T00:00:00+08:00</published><updated>2024-09-30T00:00:00+08:00</updated><id>/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%EF%BC%88%E4%B8%80%EF%BC%89</id><content type="html" xml:base="/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%B8%80.html"><![CDATA[<h2 id="引言">引言</h2>
+<img src="/assets/images/ss1.jpg" alt="图1" />
+<img src="/assets/images/ss2.jpg" alt="图2" /></p>]]></content><author><name>desong</name></author><summary type="html"><![CDATA[系统架构概述]]></summary></entry><entry><title type="html">分布式发布订阅系统的设计与实现（一）</title><link href="https://moo611.github.io/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%B8%80.html" rel="alternate" type="text/html" title="分布式发布订阅系统的设计与实现（一）" /><published>2024-09-30T00:00:00+08:00</published><updated>2024-09-30T00:00:00+08:00</updated><id>https://moo611.github.io/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%EF%BC%88%E4%B8%80%EF%BC%89</id><content type="html" xml:base="https://moo611.github.io/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%B8%80.html"><![CDATA[<h2 id="引言">引言</h2>
 
 <p>分布式消息订阅系统是一种用于处理和分发消息的架构，旨在实现高效、可靠的信息传递。该系统主要由三个组件组成：代理、发布者和订阅者。</p>
 
@@ -724,13 +724,13 @@
 
 <p>4、取消订阅主题：停止接收来自主题的消息。代理发送通知确认取消订阅的消息</p>
 
-<p><img src="../assets/images/broker.jpg" alt="图1" /></p>
+<p><img src="/assets/images/broker.jpg" alt="图1" /></p>
 
 <h2 id="设计思路">设计思路</h2>
 
 <p>1、无论是结点和发布者、订阅者之间的通信，还是结点之间的通信，都基于socket。</p>
 
-<p><img src="../assets/images/socket.jpg" alt="图2" /></p>
+<p><img src="/assets/images/socket.jpg" alt="图2" /></p>
 
 <p>2、创建一个线程，来实现消息订阅者、发布者之间的通信。创建一个主题类，用于存储订阅者，确保发布者往该主题发布消息时，能通知该主题下的订阅者。</p>
 

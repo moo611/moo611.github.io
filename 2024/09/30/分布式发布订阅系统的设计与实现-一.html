@@ -24,7 +24,7 @@
 <meta property="og:locale" content="en_US">
 <meta property="og:site_name" content="desong的博客">
 <meta property="og:title" content="分布式发布订阅系统的设计与实现（一）">
-<meta property="og:url" content="/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%B8%80.html">
+<meta property="og:url" content="https://moo611.github.io/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%B8%80.html">
 
 
   <meta property="og:description" content="引言">
@@ -42,7 +42,7 @@
 
 
 
-<link rel="canonical" href="/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%B8%80.html">
+<link rel="canonical" href="https://moo611.github.io/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%B8%80.html">
 
 
 
@@ -138,7 +138,7 @@
 
   
     <div class="author__avatar">
-      <a href="/">
+      <a href="https://moo611.github.io/">
         <img src="/assets/images/logo.png" alt="desong" itemprop="image" class="u-photo">
       </a>
     </div>
@@ -146,7 +146,7 @@
 
   <div class="author__content">
     <h3 class="author__name p-name" itemprop="name">
-      <a class="u-url" rel="me" href="/" itemprop="url">desong</a>
+      <a class="u-url" rel="me" href="https://moo611.github.io/" itemprop="url">desong</a>
     </h3>
     
       <div class="author__bio p-note" itemprop="description">
@@ -241,7 +241,7 @@
       
         <header>
           <h1 id="page-title" class="page__title" itemprop="headline">
-            <a href="/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%B8%80.html" itemprop="url">分布式发布订阅系统的设计与实现（一）
+            <a href="https://moo611.github.io/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%B8%80.html" itemprop="url">分布式发布订阅系统的设计与实现（一）
 </a>
           </h1>
           
@@ -304,13 +304,13 @@
 
 <p>4、取消订阅主题：停止接收来自主题的消息。代理发送通知确认取消订阅的消息</p>
 
-<p><img src="../assets/images/broker.jpg" alt="图1" /></p>
+<p><img src="/assets/images/broker.jpg" alt="图1" /></p>
 
 <h2 id="设计思路">设计思路</h2>
 
 <p>1、无论是结点和发布者、订阅者之间的通信，还是结点之间的通信，都基于socket。</p>
 
-<p><img src="../assets/images/socket.jpg" alt="图2" /></p>
+<p><img src="/assets/images/socket.jpg" alt="图2" /></p>
 
 <p>2、创建一个线程，来实现消息订阅者、发布者之间的通信。创建一个主题类，用于存储订阅者，确保发布者往该主题发布消息时，能通知该主题下的订阅者。</p>
 
@@ -429,7 +429,7 @@
   </ul>
 </div>
 
-<div class="page__footer-copyright">&copy; 2024 <a href="">desong的博客</a>. Powered by <a href="https://jekyllrb.com" rel="nofollow">Jekyll</a> &amp; <a href="https://mademistakes.com/work/minimal-mistakes-jekyll-theme/" rel="nofollow">Minimal Mistakes</a>.</div>
+<div class="page__footer-copyright">&copy; 2024 <a href="https://moo611.github.io">desong的博客</a>. Powered by <a href="https://jekyllrb.com" rel="nofollow">Jekyll</a> &amp; <a href="https://mademistakes.com/work/minimal-mistakes-jekyll-theme/" rel="nofollow">Minimal Mistakes</a>.</div>
 
       </footer>
     </div>
