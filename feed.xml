@@ -1,0 +1,733 @@
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.3.4">Jekyll</generator><link href="/feed.xml" rel="self" type="application/atom+xml" /><link href="/" rel="alternate" type="text/html" /><updated>2024-11-10T22:20:45+08:00</updated><id>/feed.xml</id><title type="html">desong的博客</title><subtitle>Write an awesome description for your new site here. You can edit this line in _config.yml. It will appear in your document head meta (for Google search results) and in your feed.xml site description.</subtitle><author><name>desong</name></author><entry><title type="html">分布式发布订阅系统的设计与实现（二）</title><link href="/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%BA%8C.html" rel="alternate" type="text/html" title="分布式发布订阅系统的设计与实现（二）" /><published>2024-09-30T00:00:00+08:00</published><updated>2024-09-30T00:00:00+08:00</updated><id>/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%EF%BC%88%E4%BA%8C%EF%BC%89</id><content type="html" xml:base="/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%BA%8C.html"><![CDATA[<h2 id="系统架构概述">系统架构概述</h2>
+
+<p>在单节点环境下，代理（broker）负责协调发布者和订阅者的交互，存储消息并负责将消息推送给已订阅的客户端。整体流程如下：</p>
+
+<ol>
+  <li>发布者将消息发布到指定的主题（Topic）。</li>
+  <li>代理接收到消息后，根据主题找到对应的订阅者。</li>
+  <li>代理将消息推送至所有订阅该主题的订阅者。</li>
+</ol>
+
+<h2 id="实现细节">实现细节</h2>
+
+<h3 id="1-发布者实现">1. 发布者实现</h3>
+
+<p>发布者是客户端系统，负责创建主题并向主题发布消息。发布者可以是任何能够发送消息的应用程序或服务。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">package</span> <span class="nn">com.example.broker</span><span class="o">;</span>
+
+<span class="kn">import</span> <span class="nn">java.io.*</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.net.*</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.util.Arrays</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.util.UUID</span><span class="o">;</span>
+
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Publisher</span> <span class="o">{</span>
+
+    <span class="kd">static</span> <span class="nc">String</span> <span class="n">username</span><span class="o">;</span>
+
+    <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">main</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span> <span class="n">args</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">IOException</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">args</span><span class="o">.</span><span class="na">length</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="o">)</span> <span class="o">{</span>
+            <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"Usage: java -jar publisher.jar &lt;username&gt; &lt;broker_ip&gt; &lt;broker_port&gt;"</span><span class="o">);</span>
+            <span class="k">return</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="n">username</span> <span class="o">=</span> <span class="n">args</span><span class="o">[</span><span class="mi">0</span><span class="o">];</span>
+        <span class="nc">String</span> <span class="n">brokerIp</span> <span class="o">=</span> <span class="n">args</span><span class="o">[</span><span class="mi">1</span><span class="o">];</span>
+        <span class="kt">int</span> <span class="n">brokerPort</span> <span class="o">=</span> <span class="nc">Integer</span><span class="o">.</span><span class="na">parseInt</span><span class="o">(</span><span class="n">args</span><span class="o">[</span><span class="mi">2</span><span class="o">]);</span>
+
+        <span class="c1">// 创建连接到 Broker 的 Socket</span>
+        <span class="nc">Socket</span> <span class="n">socket</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">Socket</span><span class="o">(</span><span class="n">brokerIp</span><span class="o">,</span> <span class="n">brokerPort</span><span class="o">);</span>
+        <span class="nc">PrintWriter</span> <span class="n">out</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">PrintWriter</span><span class="o">(</span><span class="n">socket</span><span class="o">.</span><span class="na">getOutputStream</span><span class="o">(),</span> <span class="kc">true</span><span class="o">);</span>
+        <span class="nc">BufferedReader</span> <span class="n">reader</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">BufferedReader</span><span class="o">(</span><span class="k">new</span> <span class="nc">InputStreamReader</span><span class="o">(</span><span class="nc">System</span><span class="o">.</span><span class="na">in</span><span class="o">));</span>
+        <span class="nc">BufferedReader</span> <span class="n">brokerReader</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">BufferedReader</span><span class="o">(</span><span class="k">new</span> <span class="nc">InputStreamReader</span><span class="o">(</span><span class="n">socket</span><span class="o">.</span><span class="na">getInputStream</span><span class="o">()));</span>
+
+        <span class="c1">// 发送身份标识</span>
+        <span class="n">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"PUB"</span><span class="o">);</span>
+
+
+        <span class="c1">// 创建一个线程来处理接收来自 Broker 的消息</span>
+        <span class="k">new</span> <span class="nf">Thread</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="o">{</span>
+            <span class="k">try</span> <span class="o">{</span>
+                <span class="nc">String</span> <span class="n">response</span><span class="o">;</span>
+
+                <span class="k">while</span> <span class="o">((</span><span class="n">response</span> <span class="o">=</span> <span class="n">brokerReader</span><span class="o">.</span><span class="na">readLine</span><span class="o">())</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+                    <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"[来自Broker的响应]: "</span> <span class="o">+</span> <span class="n">response</span><span class="o">);</span>
+                    <span class="k">if</span> <span class="o">(</span><span class="n">response</span><span class="o">.</span><span class="na">equals</span><span class="o">(</span><span class="s">"close"</span><span class="o">)){</span>
+                        <span class="n">socket</span><span class="o">.</span><span class="na">close</span><span class="o">();</span>
+                    <span class="o">}</span>
+                <span class="o">}</span>
+                <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"res:"</span><span class="o">+</span><span class="n">brokerReader</span><span class="o">.</span><span class="na">readLine</span><span class="o">());</span>
+            <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">IOException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+                <span class="k">if</span> <span class="o">(</span><span class="n">e</span><span class="o">.</span><span class="na">getMessage</span><span class="o">().</span><span class="na">equals</span><span class="o">(</span><span class="s">"socket closed"</span><span class="o">)){</span>
+                    <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"发布者数量不能超过5个"</span><span class="o">);</span>
+                    <span class="nc">System</span><span class="o">.</span><span class="na">exit</span><span class="o">(</span><span class="mi">0</span><span class="o">);</span>
+                <span class="o">}</span>
+
+                <span class="c1">//e.printStackTrace();</span>
+            <span class="o">}</span>
+        <span class="o">}).</span><span class="na">start</span><span class="o">();</span>
+
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"Connected to broker as "</span> <span class="o">+</span> <span class="n">username</span><span class="o">);</span>
+        <span class="k">while</span> <span class="o">(</span><span class="kc">true</span><span class="o">)</span> <span class="o">{</span>
+            <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"请选择命令：创建、发布、显示、删除。"</span><span class="o">);</span>
+            <span class="nc">String</span> <span class="n">command</span> <span class="o">=</span> <span class="n">reader</span><span class="o">.</span><span class="na">readLine</span><span class="o">();</span>
+            <span class="nc">String</span><span class="o">[]</span> <span class="n">parts</span> <span class="o">=</span> <span class="n">command</span><span class="o">.</span><span class="na">split</span><span class="o">(</span><span class="s">" "</span><span class="o">);</span>
+
+            <span class="k">switch</span> <span class="o">(</span><span class="n">parts</span><span class="o">[</span><span class="mi">0</span><span class="o">].</span><span class="na">toUpperCase</span><span class="o">())</span> <span class="o">{</span>
+                <span class="k">case</span> <span class="s">"创建"</span><span class="o">:</span>
+                    <span class="n">createTopic</span><span class="o">(</span><span class="n">parts</span><span class="o">,</span> <span class="n">out</span><span class="o">);</span>
+                    <span class="k">break</span><span class="o">;</span>
+                <span class="k">case</span> <span class="s">"发布"</span><span class="o">:</span>
+                    <span class="n">publishMessage</span><span class="o">(</span><span class="n">parts</span><span class="o">,</span> <span class="n">out</span><span class="o">);</span>
+                    <span class="k">break</span><span class="o">;</span>
+                <span class="k">case</span> <span class="s">"显示"</span><span class="o">:</span>
+                    <span class="n">showSubscribers</span><span class="o">(</span><span class="n">parts</span><span class="o">,</span> <span class="n">out</span><span class="o">);</span>
+                    <span class="k">break</span><span class="o">;</span>
+                <span class="k">case</span> <span class="s">"删除"</span><span class="o">:</span>
+                    <span class="n">deleteTopic</span><span class="o">(</span><span class="n">parts</span><span class="o">,</span> <span class="n">out</span><span class="o">);</span>
+                    <span class="k">break</span><span class="o">;</span>
+                <span class="k">default</span><span class="o">:</span>
+                    <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"[ERROR] 非法指令."</span><span class="o">);</span>
+            <span class="o">}</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">createTopic</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span> <span class="n">parts</span><span class="o">,</span> <span class="nc">PrintWriter</span> <span class="n">out</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">parts</span><span class="o">.</span><span class="na">length</span> <span class="o">!=</span> <span class="mi">3</span><span class="o">)</span> <span class="o">{</span>
+            <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"[ERROR] 创建参数错误."</span><span class="o">);</span>
+            <span class="k">return</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="nc">String</span> <span class="n">topicId</span> <span class="o">=</span> <span class="n">parts</span><span class="o">[</span><span class="mi">1</span><span class="o">];</span>
+        <span class="nc">String</span> <span class="n">topicName</span> <span class="o">=</span> <span class="n">parts</span><span class="o">[</span><span class="mi">2</span><span class="o">];</span>
+        <span class="nc">String</span> <span class="n">message</span> <span class="o">=</span> <span class="s">"CREATE "</span> <span class="o">+</span> <span class="n">topicId</span> <span class="o">+</span> <span class="s">" "</span> <span class="o">+</span> <span class="n">topicName</span> <span class="o">+</span> <span class="s">" "</span> <span class="o">+</span> <span class="n">username</span><span class="o">;</span>
+
+        <span class="n">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">message</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">publishMessage</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span> <span class="n">parts</span><span class="o">,</span> <span class="nc">PrintWriter</span> <span class="n">out</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">parts</span><span class="o">.</span><span class="na">length</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="o">)</span> <span class="o">{</span>
+            <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"[ERROR] 发布参数错误."</span><span class="o">);</span>
+            <span class="k">return</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="nc">String</span> <span class="n">topicId</span> <span class="o">=</span> <span class="n">parts</span><span class="o">[</span><span class="mi">1</span><span class="o">];</span>
+        <span class="nc">String</span> <span class="n">content</span> <span class="o">=</span> <span class="nc">String</span><span class="o">.</span><span class="na">join</span><span class="o">(</span><span class="s">" "</span><span class="o">,</span> <span class="nc">Arrays</span><span class="o">.</span><span class="na">copyOfRange</span><span class="o">(</span><span class="n">parts</span><span class="o">,</span> <span class="mi">2</span><span class="o">,</span> <span class="n">parts</span><span class="o">.</span><span class="na">length</span><span class="o">));</span>
+
+        <span class="k">if</span><span class="o">(</span><span class="n">content</span><span class="o">.</span><span class="na">length</span><span class="o">()&gt;</span><span class="mi">100</span><span class="o">){</span>
+            <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"[ERROR] 不能超过100个字母."</span><span class="o">);</span>
+            <span class="k">return</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="nc">String</span> <span class="n">message</span> <span class="o">=</span> <span class="s">"PUBLISH "</span> <span class="o">+</span> <span class="n">topicId</span> <span class="o">+</span> <span class="s">" "</span> <span class="o">+</span> <span class="n">content</span><span class="o">+</span> <span class="s">" "</span> <span class="o">+</span><span class="n">username</span><span class="o">;</span>
+
+        <span class="n">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">message</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">showSubscribers</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span> <span class="n">parts</span><span class="o">,</span> <span class="nc">PrintWriter</span> <span class="n">out</span><span class="o">)</span> <span class="o">{</span>
+
+        <span class="nc">String</span> <span class="n">message</span> <span class="o">=</span> <span class="s">"SHOW "</span><span class="o">+</span><span class="n">username</span><span class="o">;</span>
+        <span class="n">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">message</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">deleteTopic</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span> <span class="n">parts</span><span class="o">,</span> <span class="nc">PrintWriter</span> <span class="n">out</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">parts</span><span class="o">.</span><span class="na">length</span> <span class="o">!=</span> <span class="mi">2</span><span class="o">)</span> <span class="o">{</span>
+            <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"[ERROR] 删除参数错误."</span><span class="o">);</span>
+            <span class="k">return</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="nc">String</span> <span class="n">topicId</span> <span class="o">=</span> <span class="n">parts</span><span class="o">[</span><span class="mi">1</span><span class="o">];</span>
+        <span class="nc">String</span> <span class="n">message</span> <span class="o">=</span> <span class="s">"DELETE "</span> <span class="o">+</span> <span class="n">topicId</span><span class="o">;</span>
+
+        <span class="n">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">message</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<h3 id="2订阅者实现">2.订阅者实现</h3>
+
+<p>订阅者是通过代理订阅特定主题来表达兴趣的客户。他们从代理节点那里接收有关这些主题的实时消息。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">package</span> <span class="nn">com.example.broker</span><span class="o">;</span>
+
+<span class="kn">import</span> <span class="nn">java.io.*</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.net.*</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.util.UUID</span><span class="o">;</span>
+
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Subscriber</span> <span class="o">{</span>
+    <span class="kd">static</span> <span class="nc">String</span> <span class="n">username</span><span class="o">;</span>
+
+    <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">main</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span> <span class="n">args</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">IOException</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">args</span><span class="o">.</span><span class="na">length</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="o">)</span> <span class="o">{</span>
+            <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"Usage: java -jar subscriber.jar &lt;username&gt; &lt;broker_ip&gt; &lt;broker_port&gt;"</span><span class="o">);</span>
+            <span class="k">return</span><span class="o">;</span>
+        <span class="o">}</span>
+
+
+        <span class="n">username</span> <span class="o">=</span> <span class="n">args</span><span class="o">[</span><span class="mi">0</span><span class="o">];</span>
+        <span class="nc">String</span> <span class="n">brokerIp</span> <span class="o">=</span> <span class="n">args</span><span class="o">[</span><span class="mi">1</span><span class="o">];</span>
+        <span class="kt">int</span> <span class="n">brokerPort</span> <span class="o">=</span> <span class="nc">Integer</span><span class="o">.</span><span class="na">parseInt</span><span class="o">(</span><span class="n">args</span><span class="o">[</span><span class="mi">2</span><span class="o">]);</span>
+
+
+        <span class="nc">Socket</span> <span class="n">socket</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">Socket</span><span class="o">(</span><span class="n">brokerIp</span><span class="o">,</span> <span class="n">brokerPort</span><span class="o">);</span>
+        <span class="nc">PrintWriter</span> <span class="n">out</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">PrintWriter</span><span class="o">(</span><span class="n">socket</span><span class="o">.</span><span class="na">getOutputStream</span><span class="o">(),</span> <span class="kc">true</span><span class="o">);</span>
+        <span class="nc">BufferedReader</span> <span class="n">reader</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">BufferedReader</span><span class="o">(</span><span class="k">new</span> <span class="nc">InputStreamReader</span><span class="o">(</span><span class="nc">System</span><span class="o">.</span><span class="na">in</span><span class="o">));</span>
+        <span class="nc">BufferedReader</span> <span class="n">brokerReader</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">BufferedReader</span><span class="o">(</span><span class="k">new</span> <span class="nc">InputStreamReader</span><span class="o">(</span><span class="n">socket</span><span class="o">.</span><span class="na">getInputStream</span><span class="o">()));</span>
+
+        <span class="c1">// 发送身份标识</span>
+        <span class="n">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"SUB"</span><span class="o">);</span>
+
+        <span class="c1">// 使用多线程来接收Broker的消息</span>
+        <span class="k">new</span> <span class="nf">Thread</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="o">{</span>
+            <span class="k">try</span> <span class="o">{</span>
+                <span class="nc">String</span> <span class="n">message</span><span class="o">;</span>
+                <span class="k">while</span> <span class="o">((</span><span class="n">message</span> <span class="o">=</span> <span class="n">brokerReader</span><span class="o">.</span><span class="na">readLine</span><span class="o">())</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+                    <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"[来自Broker的消息]: "</span> <span class="o">+</span> <span class="n">message</span><span class="o">);</span>
+                    <span class="k">if</span> <span class="o">(</span><span class="n">message</span><span class="o">.</span><span class="na">equals</span><span class="o">(</span><span class="s">"close"</span><span class="o">)){</span>
+                        <span class="n">socket</span><span class="o">.</span><span class="na">close</span><span class="o">();</span>
+                    <span class="o">}</span>
+                <span class="o">}</span>
+            <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">IOException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+                <span class="k">if</span> <span class="o">(</span><span class="n">e</span><span class="o">.</span><span class="na">getMessage</span><span class="o">().</span><span class="na">equals</span><span class="o">(</span><span class="s">"socket closed"</span><span class="o">)){</span>
+                    <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"订阅者数量不能超过10个"</span><span class="o">);</span>
+                    <span class="nc">System</span><span class="o">.</span><span class="na">exit</span><span class="o">(</span><span class="mi">0</span><span class="o">);</span>
+                <span class="o">}</span>
+            <span class="o">}</span>
+        <span class="o">}).</span><span class="na">start</span><span class="o">();</span>
+
+
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"Connected to broker as "</span> <span class="o">+</span> <span class="n">username</span><span class="o">);</span>
+        <span class="k">while</span> <span class="o">(</span><span class="kc">true</span><span class="o">)</span> <span class="o">{</span>
+            <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"请选择命令：显示、订阅、当前、取消订阅。"</span><span class="o">);</span>
+            <span class="nc">String</span> <span class="n">command</span> <span class="o">=</span> <span class="n">reader</span><span class="o">.</span><span class="na">readLine</span><span class="o">();</span>
+            <span class="nc">String</span><span class="o">[]</span> <span class="n">parts</span> <span class="o">=</span> <span class="n">command</span><span class="o">.</span><span class="na">split</span><span class="o">(</span><span class="s">" "</span><span class="o">);</span>
+
+            <span class="k">switch</span> <span class="o">(</span><span class="n">parts</span><span class="o">[</span><span class="mi">0</span><span class="o">].</span><span class="na">toUpperCase</span><span class="o">())</span> <span class="o">{</span>
+                <span class="k">case</span> <span class="s">"显示"</span><span class="o">:</span>
+                    <span class="n">displayTopics</span><span class="o">(</span><span class="n">parts</span><span class="o">,</span> <span class="n">out</span><span class="o">);</span>
+                    <span class="k">break</span><span class="o">;</span>
+                <span class="k">case</span> <span class="s">"订阅"</span><span class="o">:</span>
+                    <span class="n">subscribe</span><span class="o">(</span><span class="n">parts</span><span class="o">,</span> <span class="n">out</span><span class="o">);</span>
+                    <span class="k">break</span><span class="o">;</span>
+                <span class="k">case</span> <span class="s">"当前"</span><span class="o">:</span>
+                    <span class="n">currentSubscriptions</span><span class="o">(</span><span class="n">out</span><span class="o">);</span>
+                    <span class="k">break</span><span class="o">;</span>
+                <span class="k">case</span> <span class="s">"取消订阅"</span><span class="o">:</span>
+                    <span class="n">unsubscribe</span><span class="o">(</span><span class="n">parts</span><span class="o">,</span> <span class="n">out</span><span class="o">);</span>
+                    <span class="k">break</span><span class="o">;</span>
+                <span class="k">default</span><span class="o">:</span>
+                    <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"[ERROR] 非法指令."</span><span class="o">);</span>
+            <span class="o">}</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">displayTopics</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span> <span class="n">parts</span><span class="o">,</span> <span class="nc">PrintWriter</span> <span class="n">out</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">parts</span><span class="o">.</span><span class="na">length</span> <span class="o">!=</span> <span class="mi">1</span> <span class="o">||</span> <span class="o">!</span><span class="n">parts</span><span class="o">[</span><span class="mi">0</span><span class="o">].</span><span class="na">equals</span><span class="o">(</span><span class="s">"显示"</span><span class="o">))</span> <span class="o">{</span>
+            <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"[ERROR] 显示参数错误."</span><span class="o">);</span>
+            <span class="k">return</span><span class="o">;</span>
+        <span class="o">}</span>
+        <span class="nc">String</span> <span class="n">message</span> <span class="o">=</span> <span class="s">"DISPLAY"</span><span class="o">;</span>
+
+        <span class="n">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">message</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">subscribe</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span> <span class="n">parts</span><span class="o">,</span> <span class="nc">PrintWriter</span> <span class="n">out</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">parts</span><span class="o">.</span><span class="na">length</span> <span class="o">!=</span> <span class="mi">2</span><span class="o">)</span> <span class="o">{</span>
+            <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"[ERROR] 订阅参数错误."</span><span class="o">);</span>
+            <span class="k">return</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="nc">String</span> <span class="n">topicId</span> <span class="o">=</span> <span class="n">parts</span><span class="o">[</span><span class="mi">1</span><span class="o">];</span>
+
+        <span class="nc">String</span> <span class="n">message</span> <span class="o">=</span> <span class="s">"SUBSCRIBE "</span> <span class="o">+</span> <span class="n">topicId</span> <span class="o">+</span> <span class="s">" "</span> <span class="o">+</span> <span class="n">username</span><span class="o">;</span>
+
+
+        <span class="n">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">message</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">currentSubscriptions</span><span class="o">(</span><span class="nc">PrintWriter</span> <span class="n">out</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nc">String</span> <span class="n">message</span> <span class="o">=</span> <span class="s">"CURRENT "</span><span class="o">+</span><span class="n">username</span><span class="o">;</span>
+
+        <span class="n">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">message</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">unsubscribe</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span> <span class="n">parts</span><span class="o">,</span> <span class="nc">PrintWriter</span> <span class="n">out</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">parts</span><span class="o">.</span><span class="na">length</span> <span class="o">!=</span> <span class="mi">2</span><span class="o">)</span> <span class="o">{</span>
+            <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"[ERROR] 取消订阅参数错误."</span><span class="o">);</span>
+            <span class="k">return</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="nc">String</span> <span class="n">topicId</span> <span class="o">=</span> <span class="n">parts</span><span class="o">[</span><span class="mi">1</span><span class="o">];</span>
+
+        <span class="nc">String</span> <span class="n">message</span> <span class="o">=</span> <span class="s">"UNSUBSCRIBE "</span> <span class="o">+</span> <span class="n">topicId</span> <span class="o">+</span> <span class="s">" "</span> <span class="o">+</span> <span class="n">username</span><span class="o">;</span>
+
+        <span class="n">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">message</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<h3 id="3代理实现">3.代理实现</h3>
+
+<p>代理是分布式消息订阅系统的核心，负责管理主题、订阅和消息分发。代理节点相互连接，形成一个网络，管理主题创建、主题列表、订阅者列表和消息路由，确保消息能够在不同的主题和订阅者之间有效地传递。</p>
+
+<p>在单节点下，代理只需要接收来自订阅者或者发布者的消息，并进行相应处理即可，而不需要考虑多个结点之间的消息同步问题。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">package</span> <span class="nn">com.example.broker</span><span class="o">;</span>
+
+<span class="kn">import</span> <span class="nn">java.io.BufferedReader</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.io.IOException</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.io.InputStreamReader</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.io.PrintWriter</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.net.ServerSocket</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.net.Socket</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.text.SimpleDateFormat</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.util.*</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.util.stream.Collectors</span><span class="o">;</span>
+
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Broker</span> <span class="o">{</span>
+
+    <span class="c1">// 当前连接的 Publisher 和 Subscriber 数量</span>
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">int</span> <span class="n">publisherCount</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">int</span> <span class="n">subscriberCount</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kd">final</span> <span class="nc">Map</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">,</span> <span class="nc">Topic</span><span class="o">&gt;</span> <span class="n">topics</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">HashMap</span><span class="o">&lt;&gt;();</span>
+
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kd">final</span> <span class="kt">int</span> <span class="no">MAX_PUB</span> <span class="o">=</span> <span class="mi">5</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kd">final</span> <span class="kt">int</span> <span class="no">MAX_SUB</span> <span class="o">=</span> <span class="mi">10</span><span class="o">;</span>
+    <span class="c1">//记录各自节点下的socketClient，用于通知</span>
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kd">final</span> <span class="nc">Map</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">,</span> <span class="nc">List</span><span class="o">&lt;</span><span class="nc">Socket</span><span class="o">&gt;&gt;</span> <span class="n">socketClients</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">HashMap</span><span class="o">&lt;&gt;();</span>
+
+    <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">main</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span> <span class="n">args</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">IOException</span> <span class="o">{</span>
+        <span class="kt">int</span> <span class="n">port</span> <span class="o">=</span> <span class="nc">Integer</span><span class="o">.</span><span class="na">parseInt</span><span class="o">(</span><span class="n">args</span><span class="o">[</span><span class="mi">0</span><span class="o">]);</span>
+        <span class="nc">ServerSocket</span> <span class="n">serverSocket</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">ServerSocket</span><span class="o">(</span><span class="n">port</span><span class="o">);</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"Broker started on port: "</span> <span class="o">+</span> <span class="n">port</span><span class="o">);</span>
+
+
+        <span class="c1">// 接受客户端连接</span>
+        <span class="k">while</span> <span class="o">(</span><span class="kc">true</span><span class="o">)</span> <span class="o">{</span>
+            <span class="nc">Socket</span> <span class="n">socket</span> <span class="o">=</span> <span class="n">serverSocket</span><span class="o">.</span><span class="na">accept</span><span class="o">();</span>
+            <span class="k">new</span> <span class="nf">Thread</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="o">{</span>
+                <span class="k">try</span> <span class="o">{</span>
+                    <span class="nc">BufferedReader</span> <span class="n">in</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">BufferedReader</span><span class="o">(</span><span class="k">new</span> <span class="nc">InputStreamReader</span><span class="o">(</span><span class="n">socket</span><span class="o">.</span><span class="na">getInputStream</span><span class="o">()));</span>
+                    <span class="nc">PrintWriter</span> <span class="n">out</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">PrintWriter</span><span class="o">(</span><span class="n">socket</span><span class="o">.</span><span class="na">getOutputStream</span><span class="o">(),</span> <span class="kc">true</span><span class="o">);</span>
+
+                    <span class="c1">// 读取初始消息以确定连接类型</span>
+                    <span class="nc">String</span> <span class="n">type</span> <span class="o">=</span> <span class="n">in</span><span class="o">.</span><span class="na">readLine</span><span class="o">();</span>
+                    <span class="k">if</span> <span class="o">(</span><span class="s">"SUB"</span><span class="o">.</span><span class="na">equalsIgnoreCase</span><span class="o">(</span><span class="n">type</span><span class="o">)</span> <span class="o">||</span> <span class="s">"PUB"</span><span class="o">.</span><span class="na">equalsIgnoreCase</span><span class="o">(</span><span class="n">type</span><span class="o">))</span> <span class="o">{</span>
+                        <span class="c1">// 这是来自客户端的连接</span>
+<span class="c1">//                        clientConnections.add(socket);</span>
+                        <span class="k">new</span> <span class="nf">Thread</span><span class="o">(</span><span class="k">new</span> <span class="nc">ClientHandler</span><span class="o">(</span><span class="n">socket</span><span class="o">)).</span><span class="na">start</span><span class="o">();</span>
+                        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"Accepted connection from a client."</span><span class="o">);</span>
+
+
+                        <span class="k">if</span> <span class="o">(</span><span class="s">"SUB"</span><span class="o">.</span><span class="na">equalsIgnoreCase</span><span class="o">(</span><span class="n">type</span><span class="o">))</span> <span class="o">{</span>
+                            <span class="n">subscriberCount</span><span class="o">++;</span>
+                            <span class="k">if</span> <span class="o">(</span><span class="n">subscriberCount</span> <span class="o">&gt;</span> <span class="no">MAX_SUB</span><span class="o">)</span> <span class="o">{</span>
+                                <span class="c1">//socket.close();</span>
+                                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="s">"close"</span><span class="o">);</span>
+                                <span class="n">subscriberCount</span><span class="o">--;</span>
+                            <span class="o">}</span>
+
+                        <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+                            <span class="n">publisherCount</span><span class="o">++;</span>
+                            <span class="k">if</span> <span class="o">(</span><span class="n">publisherCount</span> <span class="o">&gt;</span> <span class="no">MAX_PUB</span><span class="o">)</span> <span class="o">{</span>
+                                <span class="c1">//socket.close();</span>
+                                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="s">"close"</span><span class="o">);</span>
+                                <span class="n">publisherCount</span><span class="o">--;</span>
+                            <span class="o">}</span>
+
+                        <span class="o">}</span>
+
+                    <span class="o">}</span>
+                <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">IOException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+                    <span class="c1">//e.printStackTrace();</span>
+                    <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">e</span><span class="o">.</span><span class="na">getMessage</span><span class="o">());</span>
+                <span class="o">}</span>
+            <span class="o">}).</span><span class="na">start</span><span class="o">();</span>
+        <span class="o">}</span>
+
+    <span class="o">}</span>
+
+    <span class="c1">// 处理客户端消息的类</span>
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kd">class</span> <span class="nc">ClientHandler</span> <span class="kd">implements</span> <span class="nc">Runnable</span> <span class="o">{</span>
+        <span class="kd">private</span> <span class="kd">final</span> <span class="nc">Socket</span> <span class="n">clientSocket</span><span class="o">;</span>
+
+        <span class="kd">public</span> <span class="nf">ClientHandler</span><span class="o">(</span><span class="nc">Socket</span> <span class="n">socket</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">this</span><span class="o">.</span><span class="na">clientSocket</span> <span class="o">=</span> <span class="n">socket</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="nd">@Override</span>
+        <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
+            <span class="k">try</span> <span class="o">(</span><span class="nc">BufferedReader</span> <span class="n">in</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">BufferedReader</span><span class="o">(</span><span class="k">new</span> <span class="nc">InputStreamReader</span><span class="o">(</span><span class="n">clientSocket</span><span class="o">.</span><span class="na">getInputStream</span><span class="o">()));</span>
+                 <span class="nc">PrintWriter</span> <span class="n">out</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">PrintWriter</span><span class="o">(</span><span class="n">clientSocket</span><span class="o">.</span><span class="na">getOutputStream</span><span class="o">(),</span> <span class="kc">true</span><span class="o">))</span> <span class="o">{</span>
+
+                <span class="nc">String</span> <span class="n">message</span><span class="o">;</span>
+                <span class="k">while</span> <span class="o">((</span><span class="n">message</span> <span class="o">=</span> <span class="n">in</span><span class="o">.</span><span class="na">readLine</span><span class="o">())</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+                    <span class="n">handleClientMessage</span><span class="o">(</span><span class="n">message</span><span class="o">,</span> <span class="n">clientSocket</span><span class="o">);</span>
+                <span class="o">}</span>
+            <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">IOException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+                <span class="c1">//e.printStackTrace();</span>
+                <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">e</span><span class="o">.</span><span class="na">getMessage</span><span class="o">());</span>
+            <span class="o">}</span>
+        <span class="o">}</span>
+
+        <span class="c1">// 处理来自客户端的消息</span>
+        <span class="kd">private</span> <span class="kt">void</span> <span class="nf">handleClientMessage</span><span class="o">(</span><span class="nc">String</span> <span class="n">message</span><span class="o">,</span> <span class="nc">Socket</span> <span class="n">socket</span><span class="o">)</span> <span class="o">{</span>
+            <span class="nc">String</span><span class="o">[]</span> <span class="n">parts</span> <span class="o">=</span> <span class="n">message</span><span class="o">.</span><span class="na">split</span><span class="o">(</span><span class="s">" "</span><span class="o">);</span>
+            <span class="nc">String</span> <span class="n">command</span> <span class="o">=</span> <span class="n">parts</span><span class="o">[</span><span class="mi">0</span><span class="o">];</span>
+
+            <span class="k">switch</span> <span class="o">(</span><span class="n">command</span><span class="o">)</span> <span class="o">{</span>
+                <span class="k">case</span> <span class="s">"CREATE"</span><span class="o">:</span>
+                    <span class="n">createTopic</span><span class="o">(</span><span class="n">parts</span><span class="o">,</span> <span class="n">socket</span><span class="o">);</span>
+                    
+                    <span class="k">break</span><span class="o">;</span>
+                <span class="k">case</span> <span class="s">"PUBLISH"</span><span class="o">:</span>
+                    <span class="n">publishMessage</span><span class="o">(</span><span class="n">parts</span><span class="o">,</span> <span class="n">socket</span><span class="o">);</span>
+                    
+                    <span class="k">break</span><span class="o">;</span>
+                <span class="k">case</span> <span class="s">"SHOW"</span><span class="o">:</span>
+                    <span class="n">showSubscribers</span><span class="o">(</span><span class="n">parts</span><span class="o">,</span> <span class="n">socket</span><span class="o">);</span>
+                    <span class="k">break</span><span class="o">;</span>
+                <span class="k">case</span> <span class="s">"DELETE"</span><span class="o">:</span>
+                    <span class="n">deleteTopic</span><span class="o">(</span><span class="n">parts</span><span class="o">,</span> <span class="n">socket</span><span class="o">);</span>
+                    
+                    <span class="k">break</span><span class="o">;</span>
+                <span class="k">case</span> <span class="s">"SUBSCRIBE"</span><span class="o">:</span>
+                    <span class="n">subscribe</span><span class="o">(</span><span class="n">parts</span><span class="o">,</span> <span class="n">socket</span><span class="o">);</span>
+                    
+                    <span class="k">break</span><span class="o">;</span>
+                <span class="k">case</span> <span class="s">"DISPLAY"</span><span class="o">:</span>
+                    <span class="n">displayTopics</span><span class="o">(</span><span class="n">socket</span><span class="o">);</span>
+                    <span class="k">break</span><span class="o">;</span>
+                <span class="k">case</span> <span class="s">"CURRENT"</span><span class="o">:</span>
+                    <span class="n">showCurrentSubscriptions</span><span class="o">(</span><span class="n">parts</span><span class="o">,</span><span class="n">socket</span><span class="o">);</span>
+                    <span class="k">break</span><span class="o">;</span>
+                <span class="k">case</span> <span class="s">"UNSUBSCRIBE"</span><span class="o">:</span>
+                    <span class="n">unsubscribe</span><span class="o">(</span><span class="n">parts</span><span class="o">,</span> <span class="n">socket</span><span class="o">);</span>
+                    
+                    <span class="k">break</span><span class="o">;</span>
+                <span class="k">default</span><span class="o">:</span>
+                    <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"[ERROR] 客户端非法指令."</span><span class="o">);</span>
+            <span class="o">}</span>
+        <span class="o">}</span>
+
+
+        <span class="c1">// 创建主题</span>
+        <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">createTopic</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span> <span class="n">parts</span><span class="o">,</span> <span class="nc">Socket</span> <span class="n">socket</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">if</span> <span class="o">(</span><span class="n">parts</span><span class="o">.</span><span class="na">length</span> <span class="o">!=</span> <span class="mi">4</span><span class="o">)</span> <span class="o">{</span>
+                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="s">"[ERROR] 创建主题参数错误"</span><span class="o">);</span>
+                <span class="k">return</span><span class="o">;</span>
+            <span class="o">}</span>
+
+            <span class="nc">String</span> <span class="n">topicId</span> <span class="o">=</span> <span class="n">parts</span><span class="o">[</span><span class="mi">1</span><span class="o">];</span>
+            <span class="nc">String</span> <span class="n">topicName</span> <span class="o">=</span> <span class="n">parts</span><span class="o">[</span><span class="mi">2</span><span class="o">];</span>
+            <span class="nc">String</span> <span class="n">publisher</span> <span class="o">=</span> <span class="n">parts</span><span class="o">[</span><span class="mi">3</span><span class="o">];</span>
+
+            <span class="k">if</span> <span class="o">(</span><span class="n">topics</span><span class="o">.</span><span class="na">containsKey</span><span class="o">(</span><span class="n">topicId</span><span class="o">))</span> <span class="o">{</span>
+                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="s">"[ERROR] 主题已存在."</span><span class="o">);</span>
+            <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+                <span class="n">topics</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">topicId</span><span class="o">,</span> <span class="k">new</span> <span class="nc">Topic</span><span class="o">(</span><span class="n">topicId</span><span class="o">,</span> <span class="n">topicName</span><span class="o">,</span> <span class="n">publisher</span><span class="o">));</span>
+                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="s">"[SUCCESS] 主题创建: "</span> <span class="o">+</span> <span class="n">topicId</span> <span class="o">+</span> <span class="s">" - "</span> <span class="o">+</span> <span class="n">topicName</span><span class="o">);</span>
+            <span class="o">}</span>
+        <span class="o">}</span>
+
+        <span class="c1">// 发布消息</span>
+        <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">publishMessage</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span> <span class="n">parts</span><span class="o">,</span> <span class="nc">Socket</span> <span class="n">socket</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">if</span> <span class="o">(</span><span class="n">parts</span><span class="o">.</span><span class="na">length</span> <span class="o">&lt;</span> <span class="mi">4</span><span class="o">)</span> <span class="o">{</span>
+                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="s">"[ERROR] 发布消息参数错误"</span><span class="o">);</span>
+                <span class="k">return</span><span class="o">;</span>
+            <span class="o">}</span>
+
+            <span class="nc">String</span> <span class="n">topicId</span> <span class="o">=</span> <span class="n">parts</span><span class="o">[</span><span class="mi">1</span><span class="o">];</span>
+            <span class="nc">String</span> <span class="n">message</span> <span class="o">=</span> <span class="nc">String</span><span class="o">.</span><span class="na">join</span><span class="o">(</span><span class="s">" "</span><span class="o">,</span> <span class="nc">Arrays</span><span class="o">.</span><span class="na">copyOfRange</span><span class="o">(</span><span class="n">parts</span><span class="o">,</span> <span class="mi">2</span><span class="o">,</span> <span class="n">parts</span><span class="o">.</span><span class="na">length</span><span class="o">));</span>
+            <span class="nc">Topic</span> <span class="n">topic</span> <span class="o">=</span> <span class="n">topics</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">topicId</span><span class="o">);</span>
+
+            <span class="k">if</span> <span class="o">(</span><span class="n">topic</span> <span class="o">==</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="s">"[ERROR] 主题没找到: "</span> <span class="o">+</span> <span class="n">topicId</span><span class="o">);</span>
+                <span class="k">return</span><span class="o">;</span>
+            <span class="o">}</span>
+            <span class="nc">String</span> <span class="n">username</span> <span class="o">=</span> <span class="n">parts</span><span class="o">[</span><span class="mi">3</span><span class="o">];</span>
+            <span class="k">if</span> <span class="o">(!</span><span class="n">topic</span><span class="o">.</span><span class="na">getPublisher</span><span class="o">().</span><span class="na">equals</span><span class="o">(</span><span class="n">username</span><span class="o">)){</span>
+                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="s">"[ERROR] 该主题不是自己创建的 "</span><span class="o">);</span>
+                <span class="k">return</span><span class="o">;</span>
+            <span class="o">}</span>
+
+
+            <span class="nc">String</span> <span class="n">timestamp</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">SimpleDateFormat</span><span class="o">(</span><span class="s">"dd/MM HH:mm:ss"</span><span class="o">).</span><span class="na">format</span><span class="o">(</span><span class="k">new</span> <span class="nc">Date</span><span class="o">());</span>
+            <span class="nc">String</span> <span class="n">formattedMessage</span> <span class="o">=</span> <span class="nc">String</span><span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"[%s] [主题 ID:%s:%s] [%s]"</span><span class="o">,</span> <span class="n">timestamp</span><span class="o">,</span> <span class="n">topicId</span><span class="o">,</span> <span class="n">topic</span><span class="o">.</span><span class="na">getName</span><span class="o">(),</span> <span class="n">message</span><span class="o">);</span>
+            <span class="n">topic</span><span class="o">.</span><span class="na">publishMessage</span><span class="o">(</span><span class="n">formattedMessage</span><span class="o">);</span>
+
+            <span class="k">if</span> <span class="o">(</span><span class="n">socketClients</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">topicId</span><span class="o">)</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+                <span class="k">for</span> <span class="o">(</span><span class="nc">Socket</span> <span class="n">subscriberSocket</span> <span class="o">:</span> <span class="n">socketClients</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">topicId</span><span class="o">))</span> <span class="o">{</span>
+                    <span class="k">try</span> <span class="o">{</span>
+                        <span class="nc">PrintWriter</span> <span class="n">out</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">PrintWriter</span><span class="o">(</span><span class="n">subscriberSocket</span><span class="o">.</span><span class="na">getOutputStream</span><span class="o">(),</span> <span class="kc">true</span><span class="o">);</span>
+                        <span class="n">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">formattedMessage</span><span class="o">);</span>
+                    <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">IOException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+                        <span class="c1">//e.printStackTrace();</span>
+                        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">e</span><span class="o">.</span><span class="na">getMessage</span><span class="o">());</span>
+                    <span class="o">}</span>
+                <span class="o">}</span>
+            <span class="o">}</span>
+
+            <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="s">"[SUCCESS] 成功发布消息: "</span> <span class="o">+</span> <span class="n">topicId</span><span class="o">);</span>
+        <span class="o">}</span>
+
+        <span class="c1">// 显示某个发布者的订阅者数量</span>
+        <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">showSubscribers</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span> <span class="n">parts</span><span class="o">,</span> <span class="nc">Socket</span> <span class="n">socket</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">if</span> <span class="o">(</span><span class="n">parts</span><span class="o">.</span><span class="na">length</span> <span class="o">!=</span> <span class="mi">2</span><span class="o">)</span> <span class="o">{</span>
+                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="s">"[ERROR] 显示主题及订阅者参数错误."</span><span class="o">);</span>
+                <span class="k">return</span><span class="o">;</span>
+            <span class="o">}</span>
+
+            <span class="nc">String</span> <span class="n">publisher</span> <span class="o">=</span> <span class="n">parts</span><span class="o">[</span><span class="mi">1</span><span class="o">];</span>
+            <span class="nc">List</span><span class="o">&lt;</span><span class="nc">Topic</span><span class="o">&gt;</span> <span class="n">publisherTopics</span> <span class="o">=</span> <span class="n">getTopicsByPublisher</span><span class="o">(</span><span class="n">publisher</span><span class="o">);</span>
+
+            <span class="k">for</span> <span class="o">(</span><span class="nc">Topic</span> <span class="n">tp</span> <span class="o">:</span> <span class="n">publisherTopics</span><span class="o">)</span> <span class="o">{</span>
+                <span class="kt">int</span> <span class="n">subscriberCount</span> <span class="o">=</span> <span class="n">tp</span><span class="o">.</span><span class="na">getSubscribers</span><span class="o">().</span><span class="na">size</span><span class="o">();</span>
+                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="nc">String</span><span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"[主题 ID:%s] [主题名称:%s] [订阅者数量:%d]"</span><span class="o">,</span> <span class="n">tp</span><span class="o">.</span><span class="na">getId</span><span class="o">(),</span> <span class="n">tp</span><span class="o">.</span><span class="na">getName</span><span class="o">(),</span> <span class="n">subscriberCount</span><span class="o">));</span>
+            <span class="o">}</span>
+        <span class="o">}</span>
+
+        <span class="c1">// 删除主题</span>
+        <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">deleteTopic</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span> <span class="n">parts</span><span class="o">,</span> <span class="nc">Socket</span> <span class="n">socket</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">if</span> <span class="o">(</span><span class="n">parts</span><span class="o">.</span><span class="na">length</span> <span class="o">!=</span> <span class="mi">2</span><span class="o">)</span> <span class="o">{</span>
+                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="s">"[ERROR] 删除主题参数错误."</span><span class="o">);</span>
+                <span class="k">return</span><span class="o">;</span>
+            <span class="o">}</span>
+
+            <span class="nc">String</span> <span class="n">topicId</span> <span class="o">=</span> <span class="n">parts</span><span class="o">[</span><span class="mi">1</span><span class="o">];</span>
+            <span class="k">if</span> <span class="o">(</span><span class="n">topics</span><span class="o">.</span><span class="na">remove</span><span class="o">(</span><span class="n">topicId</span><span class="o">)</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="s">"[SUCCESS] 主题删除成功: "</span> <span class="o">+</span> <span class="n">topicId</span><span class="o">);</span>
+            <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="s">"[ERROR] 主题没找到: "</span> <span class="o">+</span> <span class="n">topicId</span><span class="o">);</span>
+            <span class="o">}</span>
+
+            <span class="c1">//删掉订阅者socket</span>
+            <span class="k">if</span> <span class="o">(</span><span class="n">socketClients</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">topicId</span><span class="o">)</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+                <span class="n">socketClients</span><span class="o">.</span><span class="na">remove</span><span class="o">(</span><span class="n">topicId</span><span class="o">);</span>
+            <span class="o">}</span>
+        <span class="o">}</span>
+
+        <span class="c1">// 订阅主题</span>
+        <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">subscribe</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span> <span class="n">parts</span><span class="o">,</span> <span class="nc">Socket</span> <span class="n">socket</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">if</span> <span class="o">(</span><span class="n">parts</span><span class="o">.</span><span class="na">length</span> <span class="o">!=</span> <span class="mi">3</span><span class="o">)</span> <span class="o">{</span>
+                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="s">"[ERROR] 订阅主题参数错误."</span><span class="o">);</span>
+                <span class="k">return</span><span class="o">;</span>
+            <span class="o">}</span>
+
+            <span class="nc">String</span> <span class="n">topicId</span> <span class="o">=</span> <span class="n">parts</span><span class="o">[</span><span class="mi">1</span><span class="o">];</span>
+            <span class="nc">String</span> <span class="n">subscriber</span> <span class="o">=</span> <span class="n">parts</span><span class="o">[</span><span class="mi">2</span><span class="o">];</span>
+            <span class="nc">Topic</span> <span class="n">topic</span> <span class="o">=</span> <span class="n">topics</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">topicId</span><span class="o">);</span>
+            <span class="k">if</span> <span class="o">(</span><span class="n">topic</span> <span class="o">==</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="s">"[ERROR] 主题没找到: "</span> <span class="o">+</span> <span class="n">topicId</span><span class="o">);</span>
+                <span class="k">return</span><span class="o">;</span>
+            <span class="o">}</span>
+
+            <span class="n">topic</span><span class="o">.</span><span class="na">addSubscriber</span><span class="o">(</span><span class="n">subscriber</span><span class="o">);</span>
+            <span class="k">if</span> <span class="o">(</span><span class="n">socketClients</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">topicId</span><span class="o">)</span> <span class="o">==</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+                <span class="nc">List</span><span class="o">&lt;</span><span class="nc">Socket</span><span class="o">&gt;</span> <span class="n">sockets</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">ArrayList</span><span class="o">&lt;&gt;();</span>
+                <span class="n">sockets</span><span class="o">.</span><span class="na">add</span><span class="o">(</span><span class="n">socket</span><span class="o">);</span>
+                <span class="n">socketClients</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">topicId</span><span class="o">,</span> <span class="n">sockets</span><span class="o">);</span>
+            <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+                <span class="nc">List</span><span class="o">&lt;</span><span class="nc">Socket</span><span class="o">&gt;</span> <span class="n">sockets</span> <span class="o">=</span> <span class="n">socketClients</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">topicId</span><span class="o">);</span>
+                <span class="k">if</span> <span class="o">(!</span><span class="n">sockets</span><span class="o">.</span><span class="na">contains</span><span class="o">(</span><span class="n">socket</span><span class="o">))</span> <span class="o">{</span>
+                    <span class="n">sockets</span><span class="o">.</span><span class="na">add</span><span class="o">(</span><span class="n">socket</span><span class="o">);</span>
+                <span class="o">}</span>
+            <span class="o">}</span>
+
+            <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="s">"[SUCCESS] 成功订阅主题: "</span> <span class="o">+</span> <span class="n">topicId</span><span class="o">);</span>
+        <span class="o">}</span>
+
+        <span class="c1">// 显示所有主题</span>
+        <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">displayTopics</span><span class="o">(</span><span class="nc">Socket</span> <span class="n">socket</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">if</span> <span class="o">(</span><span class="n">topics</span><span class="o">.</span><span class="na">isEmpty</span><span class="o">())</span> <span class="o">{</span>
+                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="s">"[ERROR] 主题为空."</span><span class="o">);</span>
+                <span class="k">return</span><span class="o">;</span>
+            <span class="o">}</span>
+
+            <span class="k">for</span> <span class="o">(</span><span class="nc">Topic</span> <span class="n">topic</span> <span class="o">:</span> <span class="n">topics</span><span class="o">.</span><span class="na">values</span><span class="o">())</span> <span class="o">{</span>
+                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="nc">String</span><span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"[主题 ID:%s] [主题名称:%s] [发布者:%s]"</span><span class="o">,</span> <span class="n">topic</span><span class="o">.</span><span class="na">getId</span><span class="o">(),</span> <span class="n">topic</span><span class="o">.</span><span class="na">getName</span><span class="o">(),</span> <span class="n">topic</span><span class="o">.</span><span class="na">getPublisher</span><span class="o">()));</span>
+            <span class="o">}</span>
+        <span class="o">}</span>
+
+        <span class="c1">// 显示当前订阅（暂未实现）</span>
+        <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">showCurrentSubscriptions</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span><span class="n">parts</span><span class="o">,</span> <span class="nc">Socket</span> <span class="n">socket</span><span class="o">)</span> <span class="o">{</span>
+
+
+            <span class="k">if</span> <span class="o">(</span><span class="n">parts</span><span class="o">.</span><span class="na">length</span> <span class="o">!=</span> <span class="mi">2</span><span class="o">)</span> <span class="o">{</span>
+                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="s">"[ERROR] 显示订阅者订阅的主题参数错误."</span><span class="o">);</span>
+                <span class="k">return</span><span class="o">;</span>
+            <span class="o">}</span>
+
+            <span class="nc">String</span> <span class="n">subscriber</span> <span class="o">=</span> <span class="n">parts</span><span class="o">[</span><span class="mi">1</span><span class="o">];</span>
+            <span class="nc">List</span><span class="o">&lt;</span><span class="nc">Topic</span><span class="o">&gt;</span><span class="n">result</span> <span class="o">=</span> <span class="n">getTopicsBySubscriber</span><span class="o">(</span><span class="n">subscriber</span><span class="o">);</span>
+            <span class="k">for</span> <span class="o">(</span><span class="nc">Topic</span> <span class="n">topic</span> <span class="o">:</span> <span class="n">result</span><span class="o">)</span> <span class="o">{</span>
+                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="nc">String</span><span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"[主题 ID:%s] [主题名称:%s] [发布者:%s]"</span><span class="o">,</span> <span class="n">topic</span><span class="o">.</span><span class="na">getId</span><span class="o">(),</span> <span class="n">topic</span><span class="o">.</span><span class="na">getName</span><span class="o">(),</span> <span class="n">topic</span><span class="o">.</span><span class="na">getPublisher</span><span class="o">()));</span>
+            <span class="o">}</span>
+        <span class="o">}</span>
+
+        <span class="c1">// 取消订阅</span>
+        <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">unsubscribe</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span> <span class="n">parts</span><span class="o">,</span> <span class="nc">Socket</span> <span class="n">socket</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">if</span> <span class="o">(</span><span class="n">parts</span><span class="o">.</span><span class="na">length</span> <span class="o">!=</span> <span class="mi">3</span><span class="o">)</span> <span class="o">{</span>
+                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="s">"[ERROR] 取消订阅参数错误."</span><span class="o">);</span>
+                <span class="k">return</span><span class="o">;</span>
+            <span class="o">}</span>
+
+            <span class="nc">String</span> <span class="n">topicId</span> <span class="o">=</span> <span class="n">parts</span><span class="o">[</span><span class="mi">1</span><span class="o">];</span>
+            <span class="nc">String</span> <span class="n">subscriber</span> <span class="o">=</span> <span class="n">parts</span><span class="o">[</span><span class="mi">2</span><span class="o">];</span>
+            <span class="nc">Topic</span> <span class="n">topic</span> <span class="o">=</span> <span class="n">topics</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">topicId</span><span class="o">);</span>
+            <span class="k">if</span> <span class="o">(</span><span class="n">topic</span> <span class="o">==</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="s">"[ERROR] 主题没找到: "</span> <span class="o">+</span> <span class="n">topicId</span><span class="o">);</span>
+                <span class="k">return</span><span class="o">;</span>
+            <span class="o">}</span>
+
+            <span class="n">topic</span><span class="o">.</span><span class="na">removeSubscriber</span><span class="o">(</span><span class="n">subscriber</span><span class="o">);</span>
+
+            <span class="nc">List</span><span class="o">&lt;</span><span class="nc">Socket</span><span class="o">&gt;</span> <span class="n">sockets</span> <span class="o">=</span> <span class="n">socketClients</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">topicId</span><span class="o">);</span>
+            <span class="k">if</span> <span class="o">(</span><span class="n">sockets</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+                <span class="n">sockets</span><span class="o">.</span><span class="na">remove</span><span class="o">(</span><span class="n">socket</span><span class="o">);</span>
+            <span class="o">}</span>
+
+            <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="s">"[SUCCESS] 取消订阅成功: "</span> <span class="o">+</span> <span class="n">topicId</span><span class="o">);</span>
+        <span class="o">}</span>
+
+
+
+        <span class="c1">// 根据发布者获取主题列表</span>
+        <span class="kd">private</span> <span class="kd">static</span> <span class="nc">List</span><span class="o">&lt;</span><span class="nc">Topic</span><span class="o">&gt;</span> <span class="nf">getTopicsByPublisher</span><span class="o">(</span><span class="nc">String</span> <span class="n">publisher</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">return</span> <span class="n">topics</span><span class="o">.</span><span class="na">values</span><span class="o">().</span><span class="na">stream</span><span class="o">()</span>
+                    <span class="o">.</span><span class="na">filter</span><span class="o">(</span><span class="n">topic</span> <span class="o">-&gt;</span> <span class="n">topic</span><span class="o">.</span><span class="na">getPublisher</span><span class="o">().</span><span class="na">equals</span><span class="o">(</span><span class="n">publisher</span><span class="o">))</span>
+                    <span class="o">.</span><span class="na">collect</span><span class="o">(</span><span class="nc">Collectors</span><span class="o">.</span><span class="na">toList</span><span class="o">());</span>
+        <span class="o">}</span>
+
+
+        <span class="c1">// 获取含有当前订阅者的 Topic 列表</span>
+        <span class="kd">private</span> <span class="kd">static</span> <span class="nc">List</span><span class="o">&lt;</span><span class="nc">Topic</span><span class="o">&gt;</span> <span class="nf">getTopicsBySubscriber</span><span class="o">(</span><span class="nc">String</span> <span class="n">subscriber</span><span class="o">)</span> <span class="o">{</span>
+            <span class="nc">List</span><span class="o">&lt;</span><span class="nc">Topic</span><span class="o">&gt;</span> <span class="n">result</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">ArrayList</span><span class="o">&lt;&gt;();</span>
+
+            <span class="k">for</span> <span class="o">(</span><span class="nc">Topic</span> <span class="n">topic</span> <span class="o">:</span> <span class="n">topics</span><span class="o">.</span><span class="na">values</span><span class="o">())</span> <span class="o">{</span>
+                <span class="k">if</span> <span class="o">(</span><span class="n">topic</span><span class="o">.</span><span class="na">getSubscribers</span><span class="o">().</span><span class="na">contains</span><span class="o">(</span><span class="n">subscriber</span><span class="o">))</span> <span class="o">{</span>
+                    <span class="n">result</span><span class="o">.</span><span class="na">add</span><span class="o">(</span><span class="n">topic</span><span class="o">);</span>
+                <span class="o">}</span>
+            <span class="o">}</span>
+
+            <span class="k">return</span> <span class="n">result</span><span class="o">;</span>
+        <span class="o">}</span>
+
+
+    <span class="o">}</span>
+    
+
+    <span class="c1">// 发送响应给客户端</span>
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">sendResponse</span><span class="o">(</span><span class="nc">Socket</span> <span class="n">socket</span><span class="o">,</span> <span class="nc">String</span> <span class="n">message</span><span class="o">)</span> <span class="o">{</span>
+
+        <span class="k">try</span> <span class="o">{</span>
+            <span class="nc">PrintWriter</span> <span class="n">out</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">PrintWriter</span><span class="o">(</span><span class="n">socket</span><span class="o">.</span><span class="na">getOutputStream</span><span class="o">(),</span> <span class="kc">true</span><span class="o">);</span>
+            <span class="n">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">message</span><span class="o">);</span>
+        <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">IOException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+            <span class="c1">//e.printStackTrace();</span>
+            <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">e</span><span class="o">.</span><span class="na">getMessage</span><span class="o">());</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+    
+    
+
+
+    <span class="c1">// Topic 类</span>
+    <span class="kd">static</span> <span class="kd">class</span> <span class="nc">Topic</span> <span class="o">{</span>
+        <span class="kd">private</span> <span class="kd">final</span> <span class="nc">String</span> <span class="n">id</span><span class="o">;</span>
+        <span class="kd">private</span> <span class="kd">final</span> <span class="nc">String</span> <span class="n">name</span><span class="o">;</span>
+        <span class="kd">private</span> <span class="nc">String</span> <span class="n">publisher</span><span class="o">;</span>
+        <span class="c1">//记录所有的订阅者</span>
+        <span class="kd">private</span> <span class="kd">final</span> <span class="nc">List</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">&gt;</span> <span class="n">subscribers</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">ArrayList</span><span class="o">&lt;&gt;();</span>
+
+        <span class="kd">public</span> <span class="nf">Topic</span><span class="o">(</span><span class="nc">String</span> <span class="n">id</span><span class="o">,</span> <span class="nc">String</span> <span class="n">name</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">this</span><span class="o">.</span><span class="na">id</span> <span class="o">=</span> <span class="n">id</span><span class="o">;</span>
+            <span class="k">this</span><span class="o">.</span><span class="na">name</span> <span class="o">=</span> <span class="n">name</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="kd">public</span> <span class="nf">Topic</span><span class="o">(</span><span class="nc">String</span> <span class="n">id</span><span class="o">,</span> <span class="nc">String</span> <span class="n">name</span><span class="o">,</span> <span class="nc">String</span> <span class="n">publisher</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">this</span><span class="o">.</span><span class="na">id</span> <span class="o">=</span> <span class="n">id</span><span class="o">;</span>
+            <span class="k">this</span><span class="o">.</span><span class="na">name</span> <span class="o">=</span> <span class="n">name</span><span class="o">;</span>
+            <span class="k">this</span><span class="o">.</span><span class="na">publisher</span> <span class="o">=</span> <span class="n">publisher</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="kd">public</span> <span class="nc">String</span> <span class="nf">getId</span><span class="o">()</span> <span class="o">{</span>
+            <span class="k">return</span> <span class="n">id</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="kd">public</span> <span class="nc">String</span> <span class="nf">getName</span><span class="o">()</span> <span class="o">{</span>
+            <span class="k">return</span> <span class="n">name</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="kd">public</span> <span class="nc">String</span> <span class="nf">getPublisher</span><span class="o">()</span> <span class="o">{</span>
+            <span class="k">return</span> <span class="n">publisher</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="kd">public</span> <span class="kt">void</span> <span class="nf">setPublisher</span><span class="o">(</span><span class="nc">String</span> <span class="n">publisher</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">this</span><span class="o">.</span><span class="na">publisher</span> <span class="o">=</span> <span class="n">publisher</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="kd">public</span> <span class="nc">List</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">&gt;</span> <span class="nf">getSubscribers</span><span class="o">()</span> <span class="o">{</span>
+            <span class="k">return</span> <span class="n">subscribers</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="kd">public</span> <span class="kt">void</span> <span class="nf">publishMessage</span><span class="o">(</span><span class="nc">String</span> <span class="n">message</span><span class="o">)</span> <span class="o">{</span>
+            <span class="c1">// 可选：存储消息以供检索</span>
+        <span class="o">}</span>
+
+        <span class="kd">public</span> <span class="kt">void</span> <span class="nf">addSubscriber</span><span class="o">(</span><span class="nc">String</span> <span class="n">subscriber</span><span class="o">)</span> <span class="o">{</span>
+            <span class="n">subscribers</span><span class="o">.</span><span class="na">add</span><span class="o">(</span><span class="n">subscriber</span><span class="o">);</span>
+        <span class="o">}</span>
+
+        <span class="kd">public</span> <span class="kt">void</span> <span class="nf">removeSubscriber</span><span class="o">(</span><span class="nc">String</span> <span class="n">subscriber</span><span class="o">)</span> <span class="o">{</span>
+            <span class="n">subscribers</span><span class="o">.</span><span class="na">remove</span><span class="o">(</span><span class="n">subscriber</span><span class="o">);</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<h2 id="测试">测试</h2>
+
+<p>依次启动代理、订阅者和发布者。先由发布者创建主题，订阅者订阅主题，然后发布者发布消息，订阅者成功接收到消息。这样，单节点下的发布者订阅者功能已经实现。我们将在下一篇实现多节点下的发布订阅系统。</p>]]></content><author><name>desong</name></author><summary type="html"><![CDATA[系统架构概述]]></summary></entry><entry><title type="html">分布式发布订阅系统的设计与实现（一）</title><link href="/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%B8%80.html" rel="alternate" type="text/html" title="分布式发布订阅系统的设计与实现（一）" /><published>2024-09-30T00:00:00+08:00</published><updated>2024-09-30T00:00:00+08:00</updated><id>/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%EF%BC%88%E4%B8%80%EF%BC%89</id><content type="html" xml:base="/2024/09/30/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%B8%80.html"><![CDATA[<h2 id="引言">引言</h2>
+
+<p>分布式消息订阅系统是一种用于处理和分发消息的架构，旨在实现高效、可靠的信息传递。该系统主要由三个组件组成：代理、发布者和订阅者。</p>
+
+<h2 id="主要组件">主要组件</h2>
+
+<h3 id="1-代理">1. 代理</h3>
+
+<p>代理是分布式消息订阅系统的核心，负责管理主题、订阅和消息分发。代理节点相互连接，形成一个网络，管理主题创建、主题列表、订阅者列表和消息路由，确保消息能够在不同的主题和订阅者之间有效地传递。</p>
+
+<h3 id="2-发布者">2. 发布者</h3>
+
+<p>发布者是客户端系统，负责创建主题并向主题发布消息。发布者可以是任何能够发送消息的应用程序或服务。发布者具体的功能：</p>
+
+<p>1、创建新主题：生成唯一的主题 ID（例如 UUID）并分配名称（不一定是唯一的，因为多个发布者可能有同名的主题）。</p>
+
+<p>2、向已有的 Topic 发布消息：通过 Topic 的 Broker 发送消息，使用唯一的主题 ID。该消息应发送给所有主题订阅者。每条消息将被限制最多 100 个字符。不需要在任何代理中保留消息。</p>
+
+<p>3、显示订阅者计数：显示与此相关的每个主题的订阅者总数。</p>
+
+<p>4、删除主题：从系统中删除该主题并自动取消订阅所有当前订阅抄写员。应向每个订阅者发送一条通知消息。</p>
+
+<h3 id="3-订阅者">3. 订阅者</h3>
+
+<p>订阅者是通过代理订阅特定主题来表达兴趣的客户。他们从代理节点那里接收有关这些主题的实时消息。订阅者具体的功能：</p>
+
+<p>1、列出所有可用主题：检索经纪网络中所有可用主题的列表，包括主题 ID、主题名称和发布者名称。</p>
+
+<p>2、订阅主题：使用主题的唯一 ID 订阅主题。订阅者将收到关于此主题的所有未来消息。</p>
+
+<p>3、显示当前订阅：列出活动订阅，包括主题 ID、主题名称和发布者姓名。</p>
+
+<p>4、取消订阅主题：停止接收来自主题的消息。代理发送通知确认取消订阅的消息
+个结点互联？</p>
+<h2 id="设计思路">设计思路</h2>
+
+<p>1、无论是结点和发布者、订阅者之间的通信，还是结点之间的通信，都基于socket。</p>
+
+<p>2、创建一个线程，来实现消息订阅者、发布者之间的通信。创建一个主题类，用于存储订阅者，确保发布者往该主题发布消息时，能通知该主题下的订阅者。</p>
+
+<p>3、创建另一个线程，来实现多个结点互连。当一个结点收到指令的时候，确保其他的结点也接收到通知，来保证消息的同步性。</p>
+
+<p>基于以上的思路，我们逐步实现这一系统。具体的实现将在下一篇介绍。</p>]]></content><author><name>desong</name></author><summary type="html"><![CDATA[引言]]></summary></entry></feed>
