@@ -1,0 +1,675 @@
+<!doctype html>
+<!--
+  Minimal Mistakes Jekyll Theme 4.26.2 by Michael Rose
+  Copyright 2013-2024 Michael Rose - mademistakes.com | @mmistakes
+  Free for personal and commercial use under the MIT license
+  https://github.com/mmistakes/minimal-mistakes/blob/master/LICENSE
+-->
+
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>分布式发布订阅系统的设计与实现（三） - desong的博客</title>
+<meta name="description" content="在前两篇中，我们介绍了消息订阅系统的基础概念及单节点下的实现。随着系统规模的扩大和性能需求的提升，单节点架构显然无法满足高并发和高可用的需求。本篇将探讨如何在分布式环境下实现发布者、订阅者和代理 Broker，并解决分布式架构中面临的挑战。">
+
+
+  <meta name="author" content="desong">
+  
+  <meta property="article:author" content="desong">
+  
+
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="desong的博客">
+<meta property="og:title" content="分布式发布订阅系统的设计与实现（三）">
+<meta property="og:url" content="https://moo611.github.io/2024/10/03/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%B8%89.html">
+
+
+  <meta property="og:description" content="在前两篇中，我们介绍了消息订阅系统的基础概念及单节点下的实现。随着系统规模的扩大和性能需求的提升，单节点架构显然无法满足高并发和高可用的需求。本篇将探讨如何在分布式环境下实现发布者、订阅者和代理 Broker，并解决分布式架构中面临的挑战。">
+
+
+
+
+
+
+
+  <meta property="article:published_time" content="2024-10-03T00:00:00+08:00">
+
+
+
+
+
+
+<link rel="canonical" href="https://moo611.github.io/2024/10/03/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%B8%89.html">
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+
+  <link href="/feed.xml" type="application/atom+xml" rel="alternate" title="desong的博客 Feed">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script type="text/javascript">
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+  
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+<link rel="preload" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@latest/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@latest/css/all.min.css"></noscript>
+
+
+
+    <!-- start custom head snippets -->
+
+<!-- insert favicons. use https://realfavicongenerator.net/ -->
+
+<!-- end custom head snippets -->
+
+  </head>
+
+  <body class="layout--single">
+    <nav class="skip-links">
+  <ul>
+    <li><a href="#site-nav" class="screen-reader-shortcut">Skip to primary navigation</a></li>
+    <li><a href="#main" class="screen-reader-shortcut">Skip to content</a></li>
+    <li><a href="#footer" class="screen-reader-shortcut">Skip to footer</a></li>
+  </ul>
+</nav>
+
+    
+
+<div class="masthead">
+  <div class="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+        <a class="site-title" href="/">
+          desong的博客
+          
+        </a>
+        <ul class="visible-links"></ul>
+        
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+
+
+    <div class="initial-content">
+      
+
+
+
+
+
+<div id="main" role="main">
+  
+  <div class="sidebar sticky">
+  
+
+
+<div itemscope itemtype="https://schema.org/Person" class="h-card">
+
+  
+    <div class="author__avatar">
+      <a href="https://moo611.github.io/">
+        <img src="/assets/images/logo.png" alt="desong" itemprop="image" class="u-photo">
+      </a>
+    </div>
+  
+
+  <div class="author__content">
+    <h3 class="author__name p-name" itemprop="name">
+      <a class="u-url" rel="me" href="https://moo611.github.io/" itemprop="url">desong</a>
+    </h3>
+    
+      <div class="author__bio p-note" itemprop="description">
+        <p>My awesome biography constrained to a sentence or two goes here.</p>
+
+      </div>
+    
+  </div>
+
+  <div class="author__urls-wrapper">
+    <button class="btn btn--inverse">Follow</button>
+    <ul class="author__urls social-icons">
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      <!--
+  <li>
+    <a href="http://link-to-whatever-social-network.com/user/" itemprop="sameAs" rel="nofollow noopener noreferrer me">
+      <i class="fas fa-fw" aria-hidden="true"></i> Custom Social Profile Link
+    </a>
+  </li>
+-->
+    </ul>
+  </div>
+</div>
+
+  
+  </div>
+
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+    <meta itemprop="headline" content="分布式发布订阅系统的设计与实现（三）">
+    <meta itemprop="description" content="在前两篇中，我们介绍了消息订阅系统的基础概念及单节点下的实现。随着系统规模的扩大和性能需求的提升，单节点架构显然无法满足高并发和高可用的需求。本篇将探讨如何在分布式环境下实现发布者、订阅者和代理 Broker，并解决分布式架构中面临的挑战。">
+    <meta itemprop="datePublished" content="2024-10-03T00:00:00+08:00">
+    
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">
+            <a href="https://moo611.github.io/2024/10/03/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%B8%89.html" itemprop="url">分布式发布订阅系统的设计与实现（三）
+</a>
+          </h1>
+          
+
+  <p class="page__meta">
+    
+
+    
+
+    
+      
+      
+
+      <span class="page__meta-readtime">
+        <i class="far fa-clock" aria-hidden="true"></i>
+        
+          2 minute read
+        
+      </span>
+    
+  </p>
+
+
+        </header>
+      
+
+      <section class="page__content" itemprop="text">
+        
+        <p>在前两篇中，我们介绍了消息订阅系统的基础概念及单节点下的实现。随着系统规模的扩大和性能需求的提升，单节点架构显然无法满足高并发和高可用的需求。本篇将探讨如何在分布式环境下实现发布者、订阅者和代理 Broker，并解决分布式架构中面临的挑战。</p>
+
+<h2 id="系统架构概述">系统架构概述</h2>
+<p>在单节点环境下，代理（broker）负责协调发布者和订阅者的交互，存储消息并负责将消息推送给已订阅的客户端，同时还需要将消息同步到其他的代理节点上。</p>
+
+<ol>
+  <li>发布者将消息发布到指定的主题（Topic）。</li>
+  <li>代理接收到消息后，根据主题找到对应的订阅者。</li>
+  <li>代理将消息推送至他连接到的订阅该主题的订阅者。</li>
+  <li>代理同步消息到其他代理。</li>
+  <li>其他代理将消息推送至各自连接到的订阅该主题的订阅者。</li>
+</ol>
+
+<h2 id="实现细节">实现细节</h2>
+
+<h3 id="1-接收其他代理连接">1. 接收其他代理连接</h3>
+<p>通过type区分是来自其他代理的连接、来自发布者的连接，还是来自订阅者的连接。如果是来自其他代理的连接，则用BrokerHandler来处理。如果是来自客户端的连接，则用ClientHandler来处理。</p>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// 解析命令行参数</span>
+        <span class="k">for</span> <span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">args</span><span class="o">.</span><span class="na">length</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>
+            <span class="k">if</span> <span class="o">(</span><span class="s">"-b"</span><span class="o">.</span><span class="na">equals</span><span class="o">(</span><span class="n">args</span><span class="o">[</span><span class="n">i</span><span class="o">]))</span> <span class="o">{</span>
+                <span class="c1">// 找到 -b 后，拼接所有后面的 broker 地址</span>
+                <span class="nc">StringBuilder</span> <span class="n">brokers</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">StringBuilder</span><span class="o">();</span>
+                <span class="k">for</span> <span class="o">(</span><span class="kt">int</span> <span class="n">j</span> <span class="o">=</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="o">;</span> <span class="n">j</span> <span class="o">&lt;</span> <span class="n">args</span><span class="o">.</span><span class="na">length</span><span class="o">;</span> <span class="n">j</span><span class="o">++)</span> <span class="o">{</span>
+                    <span class="n">brokers</span><span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="n">args</span><span class="o">[</span><span class="n">j</span><span class="o">]).</span><span class="na">append</span><span class="o">(</span><span class="s">" "</span><span class="o">);</span> <span class="c1">// 使用空格拼接多个 broker 地址</span>
+                <span class="o">}</span>
+                <span class="n">brokersArg</span> <span class="o">=</span> <span class="n">brokers</span><span class="o">.</span><span class="na">toString</span><span class="o">().</span><span class="na">trim</span><span class="o">();</span> <span class="c1">// 去掉末尾空格</span>
+                <span class="k">break</span><span class="o">;</span>
+            <span class="o">}</span>
+        <span class="o">}</span>
+
+        <span class="k">if</span> <span class="o">(!</span><span class="n">brokersArg</span><span class="o">.</span><span class="na">isEmpty</span><span class="o">())</span> <span class="o">{</span>
+            <span class="c1">// 调用 connectToOtherBrokers 方法，并传递所有 brokers 地址</span>
+            <span class="n">connectToOtherBrokers</span><span class="o">(</span><span class="n">brokersArg</span><span class="o">);</span>
+            <span class="k">new</span> <span class="nf">Thread</span><span class="o">(</span><span class="k">new</span> <span class="nc">BrokerConnectionListener</span><span class="o">(</span><span class="n">args</span><span class="o">[</span><span class="mi">2</span><span class="o">])).</span><span class="na">start</span><span class="o">();</span>
+        <span class="o">}</span>
+
+
+        <span class="c1">// 接受客户端和其他 Broker 连接</span>
+        <span class="k">while</span> <span class="o">(</span><span class="kc">true</span><span class="o">)</span> <span class="o">{</span>
+            <span class="nc">Socket</span> <span class="n">socket</span> <span class="o">=</span> <span class="n">serverSocket</span><span class="o">.</span><span class="na">accept</span><span class="o">();</span>
+            <span class="k">new</span> <span class="nf">Thread</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="o">{</span>
+                <span class="k">try</span> <span class="o">{</span>
+                    <span class="nc">BufferedReader</span> <span class="n">in</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">BufferedReader</span><span class="o">(</span><span class="k">new</span> <span class="nc">InputStreamReader</span><span class="o">(</span><span class="n">socket</span><span class="o">.</span><span class="na">getInputStream</span><span class="o">()));</span>
+                    <span class="nc">PrintWriter</span> <span class="n">out</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">PrintWriter</span><span class="o">(</span><span class="n">socket</span><span class="o">.</span><span class="na">getOutputStream</span><span class="o">(),</span> <span class="kc">true</span><span class="o">);</span>
+
+                    <span class="c1">// 读取初始消息以确定连接类型</span>
+                    <span class="nc">String</span> <span class="n">type</span> <span class="o">=</span> <span class="n">in</span><span class="o">.</span><span class="na">readLine</span><span class="o">();</span>
+                    <span class="k">if</span> <span class="o">(</span><span class="s">"BROKER"</span><span class="o">.</span><span class="na">equalsIgnoreCase</span><span class="o">(</span><span class="n">type</span><span class="o">))</span> <span class="o">{</span>
+                        <span class="c1">// 这是来自其他 Broker 的连接</span>
+                        <span class="n">brokerConnections</span><span class="o">.</span><span class="na">add</span><span class="o">(</span><span class="n">socket</span><span class="o">);</span>
+                        <span class="k">new</span> <span class="nf">Thread</span><span class="o">(</span><span class="k">new</span> <span class="nc">BrokerHandler</span><span class="o">(</span><span class="n">socket</span><span class="o">)).</span><span class="na">start</span><span class="o">();</span>
+                        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"Accepted connection from another broker."</span><span class="o">);</span>
+                    <span class="o">}</span> <span class="k">else</span> <span class="k">if</span> <span class="o">(</span><span class="s">"SUB"</span><span class="o">.</span><span class="na">equalsIgnoreCase</span><span class="o">(</span><span class="n">type</span><span class="o">)</span> <span class="o">||</span> <span class="s">"PUB"</span><span class="o">.</span><span class="na">equalsIgnoreCase</span><span class="o">(</span><span class="n">type</span><span class="o">))</span> <span class="o">{</span>
+                        <span class="c1">// 这是来自客户端的连接</span>
+<span class="c1">//                        clientConnections.add(socket);</span>
+                        <span class="k">new</span> <span class="nf">Thread</span><span class="o">(</span><span class="k">new</span> <span class="nc">ClientHandler</span><span class="o">(</span><span class="n">socket</span><span class="o">)).</span><span class="na">start</span><span class="o">();</span>
+                        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"Accepted connection from a client."</span><span class="o">);</span>
+
+
+                        <span class="k">if</span> <span class="o">(</span><span class="s">"SUB"</span><span class="o">.</span><span class="na">equalsIgnoreCase</span><span class="o">(</span><span class="n">type</span><span class="o">)){</span>
+                            <span class="n">subscriberCount</span><span class="o">++;</span>
+                            <span class="k">if</span> <span class="o">(</span><span class="n">subscriberCount</span><span class="o">&gt;</span><span class="no">MAX_SUB</span><span class="o">){</span>
+                                <span class="c1">//socket.close();</span>
+                                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span><span class="s">"close"</span><span class="o">);</span>
+                                <span class="n">subscriberCount</span><span class="o">--;</span>
+                            <span class="o">}</span>
+
+                        <span class="o">}</span><span class="k">else</span><span class="o">{</span>
+                            <span class="n">publisherCount</span><span class="o">++;</span>
+                            <span class="k">if</span> <span class="o">(</span><span class="n">publisherCount</span><span class="o">&gt;</span><span class="no">MAX_PUB</span><span class="o">){</span>
+                                <span class="c1">//socket.close();</span>
+                                <span class="n">sendResponse</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span><span class="s">"close"</span><span class="o">);</span>
+                                <span class="n">publisherCount</span><span class="o">--;</span>
+                            <span class="o">}</span>
+
+                        <span class="o">}</span>
+
+                    <span class="o">}</span>
+                <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">IOException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+                    <span class="c1">//e.printStackTrace();</span>
+                    <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">e</span><span class="o">.</span><span class="na">getMessage</span><span class="o">());</span>
+                <span class="o">}</span>
+            <span class="o">}).</span><span class="na">start</span><span class="o">();</span>
+        <span class="o">}</span>
+
+</code></pre></div></div>
+<h3 id="2-连接其他代理">2. 连接其他代理</h3>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="c1">// 连接到其他 Broker</span>
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">connectToOtherBrokers</span><span class="o">(</span><span class="nc">String</span> <span class="n">brokersArg</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nc">String</span><span class="o">[]</span> <span class="n">brokers</span> <span class="o">=</span> <span class="n">brokersArg</span><span class="o">.</span><span class="na">split</span><span class="o">(</span><span class="s">" "</span><span class="o">);</span>
+        <span class="k">for</span> <span class="o">(</span><span class="nc">String</span> <span class="n">broker</span> <span class="o">:</span> <span class="n">brokers</span><span class="o">)</span> <span class="o">{</span>
+            <span class="nc">String</span><span class="o">[]</span> <span class="n">brokerInfo</span> <span class="o">=</span> <span class="n">broker</span><span class="o">.</span><span class="na">split</span><span class="o">(</span><span class="s">":"</span><span class="o">);</span>
+            <span class="nc">String</span> <span class="n">brokerIp</span> <span class="o">=</span> <span class="n">brokerInfo</span><span class="o">[</span><span class="mi">0</span><span class="o">];</span>
+            <span class="kt">int</span> <span class="n">brokerPort</span> <span class="o">=</span> <span class="nc">Integer</span><span class="o">.</span><span class="na">parseInt</span><span class="o">(</span><span class="n">brokerInfo</span><span class="o">[</span><span class="mi">1</span><span class="o">]);</span>
+            <span class="k">try</span> <span class="o">{</span>
+                <span class="nc">Socket</span> <span class="n">brokerSocket</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">Socket</span><span class="o">(</span><span class="n">brokerIp</span><span class="o">,</span> <span class="n">brokerPort</span><span class="o">);</span>
+                <span class="nc">PrintWriter</span> <span class="n">out</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">PrintWriter</span><span class="o">(</span><span class="n">brokerSocket</span><span class="o">.</span><span class="na">getOutputStream</span><span class="o">(),</span> <span class="kc">true</span><span class="o">);</span>
+                <span class="n">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"BROKER"</span><span class="o">);</span> <span class="c1">// 发送身份标识</span>
+                <span class="n">brokerConnections</span><span class="o">.</span><span class="na">add</span><span class="o">(</span><span class="n">brokerSocket</span><span class="o">);</span> <span class="c1">// 添加到 Broker 连接列表</span>
+                <span class="k">new</span> <span class="nf">Thread</span><span class="o">(</span><span class="k">new</span> <span class="nc">BrokerHandler</span><span class="o">(</span><span class="n">brokerSocket</span><span class="o">)).</span><span class="na">start</span><span class="o">();</span>
+                <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"Connected to broker: "</span> <span class="o">+</span> <span class="n">brokerIp</span> <span class="o">+</span> <span class="s">":"</span> <span class="o">+</span> <span class="n">brokerPort</span><span class="o">);</span>
+            <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">IOException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+                <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"Failed to connect to broker: "</span> <span class="o">+</span> <span class="n">brokerIp</span> <span class="o">+</span> <span class="s">":"</span> <span class="o">+</span> <span class="n">brokerPort</span><span class="o">);</span>
+                <span class="k">if</span> <span class="o">(!</span><span class="n">failedBrokers</span><span class="o">.</span><span class="na">contains</span><span class="o">(</span><span class="n">broker</span><span class="o">)){</span>
+                    <span class="n">failedBrokers</span><span class="o">.</span><span class="na">add</span><span class="o">(</span><span class="n">broker</span><span class="o">);</span> <span class="c1">// 将失败的 Broker 加入列表</span>
+                <span class="o">}</span>
+
+            <span class="o">}</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+
+</code></pre></div></div>
+<h3 id="3-代理连接监听">3. 代理连接监听</h3>
+<p>在代理运行过程中，可能会增加新的代理。创建一个代理监听器来监听。</p>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// 监听器类：定期重试连接失败的 Broker</span>
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kd">class</span> <span class="nc">BrokerConnectionListener</span> <span class="kd">implements</span> <span class="nc">Runnable</span> <span class="o">{</span>
+        <span class="kd">private</span> <span class="kd">final</span> <span class="nc">String</span> <span class="n">brokersArg</span><span class="o">;</span>
+        <span class="kd">private</span> <span class="kd">static</span> <span class="kd">final</span> <span class="kt">int</span> <span class="no">RETRY_INTERVAL</span> <span class="o">=</span> <span class="mi">5000</span><span class="o">;</span> <span class="c1">// 每隔 5 秒重试一次</span>
+
+        <span class="kd">public</span> <span class="nf">BrokerConnectionListener</span><span class="o">(</span><span class="nc">String</span> <span class="n">brokersArg</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">this</span><span class="o">.</span><span class="na">brokersArg</span> <span class="o">=</span> <span class="n">brokersArg</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="nd">@Override</span>
+        <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
+            <span class="k">while</span> <span class="o">(</span><span class="kc">true</span><span class="o">)</span> <span class="o">{</span>
+                <span class="k">try</span> <span class="o">{</span>
+                    <span class="nc">Thread</span><span class="o">.</span><span class="na">sleep</span><span class="o">(</span><span class="no">RETRY_INTERVAL</span><span class="o">);</span>
+                    <span class="n">retryFailedConnections</span><span class="o">();</span>
+                <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">InterruptedException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+                    <span class="n">e</span><span class="o">.</span><span class="na">printStackTrace</span><span class="o">();</span>
+                <span class="o">}</span>
+            <span class="o">}</span>
+        <span class="o">}</span>
+
+        <span class="c1">// 重试连接失败的 Broker</span>
+        <span class="kd">private</span> <span class="kt">void</span> <span class="nf">retryFailedConnections</span><span class="o">()</span> <span class="o">{</span>
+            <span class="nc">Iterator</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">&gt;</span> <span class="n">iterator</span> <span class="o">=</span> <span class="n">failedBrokers</span><span class="o">.</span><span class="na">iterator</span><span class="o">();</span>
+            <span class="k">while</span> <span class="o">(</span><span class="n">iterator</span><span class="o">.</span><span class="na">hasNext</span><span class="o">())</span> <span class="o">{</span>
+                <span class="nc">String</span> <span class="n">broker</span> <span class="o">=</span> <span class="n">iterator</span><span class="o">.</span><span class="na">next</span><span class="o">();</span>
+                <span class="nc">String</span><span class="o">[]</span> <span class="n">brokerInfo</span> <span class="o">=</span> <span class="n">broker</span><span class="o">.</span><span class="na">split</span><span class="o">(</span><span class="s">":"</span><span class="o">);</span>
+                <span class="nc">String</span> <span class="n">brokerIp</span> <span class="o">=</span> <span class="n">brokerInfo</span><span class="o">[</span><span class="mi">0</span><span class="o">];</span>
+                <span class="kt">int</span> <span class="n">brokerPort</span> <span class="o">=</span> <span class="nc">Integer</span><span class="o">.</span><span class="na">parseInt</span><span class="o">(</span><span class="n">brokerInfo</span><span class="o">[</span><span class="mi">1</span><span class="o">]);</span>
+                <span class="k">try</span> <span class="o">{</span>
+                    <span class="nc">Socket</span> <span class="n">brokerSocket</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">Socket</span><span class="o">(</span><span class="n">brokerIp</span><span class="o">,</span> <span class="n">brokerPort</span><span class="o">);</span>
+                    <span class="n">brokerConnections</span><span class="o">.</span><span class="na">add</span><span class="o">(</span><span class="n">brokerSocket</span><span class="o">);</span>
+                    <span class="k">new</span> <span class="nf">Thread</span><span class="o">(</span><span class="k">new</span> <span class="nc">BrokerHandler</span><span class="o">(</span><span class="n">brokerSocket</span><span class="o">)).</span><span class="na">start</span><span class="o">();</span>
+                    <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"Reconnected to broker: "</span> <span class="o">+</span> <span class="n">brokerIp</span> <span class="o">+</span> <span class="s">":"</span> <span class="o">+</span> <span class="n">brokerPort</span><span class="o">);</span>
+                    <span class="n">iterator</span><span class="o">.</span><span class="na">remove</span><span class="o">();</span> <span class="c1">// 连接成功后从失败列表中移除</span>
+                <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">IOException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+                    <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"Retrying failed broker: "</span> <span class="o">+</span> <span class="n">brokerIp</span> <span class="o">+</span> <span class="s">":"</span> <span class="o">+</span> <span class="n">brokerPort</span><span class="o">);</span>
+                <span class="o">}</span>
+            <span class="o">}</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+
+</code></pre></div></div>
+
+<h3 id="4-向其他代理同步消息">4. 向其他代理同步消息</h3>
+<p>在处理本代理结点的发布者订阅者消息时，需要同步给其他结点。</p>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+ <span class="c1">// 向其他 Broker 广播消息</span>
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">broadcastToBrokers</span><span class="o">(</span><span class="nc">String</span> <span class="n">message</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">for</span> <span class="o">(</span><span class="nc">Socket</span> <span class="n">brokerSocket</span> <span class="o">:</span> <span class="n">brokerConnections</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">try</span> <span class="o">{</span>
+                <span class="nc">PrintWriter</span> <span class="n">out</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">PrintWriter</span><span class="o">(</span><span class="n">brokerSocket</span><span class="o">.</span><span class="na">getOutputStream</span><span class="o">(),</span> <span class="kc">true</span><span class="o">);</span>
+                <span class="n">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">message</span><span class="o">);</span>
+            <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">IOException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+                <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"Failed to broadcast message to broker: "</span> <span class="o">+</span> <span class="n">e</span><span class="o">.</span><span class="na">getMessage</span><span class="o">());</span>
+            <span class="o">}</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+
+</code></pre></div></div>
+
+<h3 id="5-接收并处理其他代理的消息">5. 接收并处理其他代理的消息</h3>
+<p>解析来自其他代理的消息，并做出对应处理。如同步创建主题、同步订阅等。</p>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// 用于处理其他 Broker 的消息</span>
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kd">class</span> <span class="nc">BrokerHandler</span> <span class="kd">implements</span> <span class="nc">Runnable</span> <span class="o">{</span>
+        <span class="kd">private</span> <span class="kd">final</span> <span class="nc">Socket</span> <span class="n">brokerSocket</span><span class="o">;</span>
+
+        <span class="kd">public</span> <span class="nf">BrokerHandler</span><span class="o">(</span><span class="nc">Socket</span> <span class="n">brokerSocket</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">this</span><span class="o">.</span><span class="na">brokerSocket</span> <span class="o">=</span> <span class="n">brokerSocket</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="nd">@Override</span>
+        <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
+            <span class="k">try</span> <span class="o">(</span><span class="nc">BufferedReader</span> <span class="n">in</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">BufferedReader</span><span class="o">(</span><span class="k">new</span> <span class="nc">InputStreamReader</span><span class="o">(</span><span class="n">brokerSocket</span><span class="o">.</span><span class="na">getInputStream</span><span class="o">())))</span> <span class="o">{</span>
+                <span class="nc">String</span> <span class="n">message</span><span class="o">;</span>
+                <span class="k">while</span> <span class="o">((</span><span class="n">message</span> <span class="o">=</span> <span class="n">in</span><span class="o">.</span><span class="na">readLine</span><span class="o">())</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+                    <span class="n">handleBrokerMessage</span><span class="o">(</span><span class="n">message</span><span class="o">);</span>
+                <span class="o">}</span>
+            <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">IOException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+                <span class="c1">//e.printStackTrace();</span>
+                <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">e</span><span class="o">.</span><span class="na">getMessage</span><span class="o">());</span>
+            <span class="o">}</span>
+        <span class="o">}</span>
+
+
+        <span class="c1">// 处理来自其他 Broker 的消息</span>
+        <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">handleBrokerMessage</span><span class="o">(</span><span class="nc">String</span> <span class="n">message</span><span class="o">)</span> <span class="o">{</span>
+            <span class="nc">String</span><span class="o">[]</span> <span class="n">parts</span> <span class="o">=</span> <span class="n">message</span><span class="o">.</span><span class="na">split</span><span class="o">(</span><span class="s">" "</span><span class="o">);</span>
+            <span class="nc">String</span> <span class="n">command</span> <span class="o">=</span> <span class="n">parts</span><span class="o">[</span><span class="mi">0</span><span class="o">];</span>
+
+
+            <span class="k">switch</span> <span class="o">(</span><span class="n">command</span><span class="o">)</span> <span class="o">{</span>
+                <span class="k">case</span> <span class="s">"CREATE"</span><span class="o">:</span>
+                    <span class="n">createTopic</span><span class="o">(</span><span class="n">parts</span><span class="o">);</span>
+                    <span class="k">break</span><span class="o">;</span>
+                <span class="k">case</span> <span class="s">"PUBLISH"</span><span class="o">:</span>
+                    <span class="n">publishMessage</span><span class="o">(</span><span class="n">parts</span><span class="o">);</span>
+                    <span class="k">break</span><span class="o">;</span>
+                <span class="k">case</span> <span class="s">"SUBSCRIBE"</span><span class="o">:</span>
+                    <span class="n">subscribe</span><span class="o">(</span><span class="n">parts</span><span class="o">);</span>
+                    <span class="k">break</span><span class="o">;</span>
+                <span class="k">case</span> <span class="s">"DELETE"</span><span class="o">:</span>
+                    <span class="n">deleteTopic</span><span class="o">(</span><span class="n">parts</span><span class="o">);</span>
+                    <span class="k">break</span><span class="o">;</span>
+                <span class="k">case</span> <span class="s">"UNSUBSCRIBE"</span><span class="o">:</span>
+                    <span class="n">unsubscribe</span><span class="o">(</span><span class="n">parts</span><span class="o">);</span>
+                <span class="k">default</span><span class="o">:</span>
+                    <span class="k">break</span><span class="o">;</span>
+            <span class="o">}</span>
+
+
+        <span class="o">}</span>
+
+
+        <span class="o">......</span>
+    <span class="o">}</span>
+
+
+</code></pre></div></div>
+
+<h2 id="测试">测试</h2>
+<p>依次启动2个代理broker1,broker2, broker1连接publisher、subscriber1；broker2连接subscriber2；subscriber1和subscriber2共同订阅了publisher创建的主题topic。</p>
+
+<p>发布者publisher创建主题,发消息
+<img src="/assets/images/ts1.jpg" alt="图1" /></p>
+
+<p>2个不同结点上的订阅者均收到消息
+<img src="/assets/images/ts2.jpg" alt="图2" />
+<img src="/assets/images/ts3.jpg" alt="图3" /></p>
+
+        
+      </section>
+
+      <footer class="page__meta">
+        
+        
+
+
+        
+
+  <p class="page__date"><strong><i class="fas fa-fw fa-calendar-alt" aria-hidden="true"></i> Updated:</strong> <time class="dt-published" datetime="2024-10-03T00:00:00+08:00">October 3, 2024</time></p>
+
+      </footer>
+
+      
+
+      
+  <nav class="pagination">
+    
+      <a href="/2024/10/02/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%BA%8C.html" class="pagination--pager" title="分布式发布订阅系统的设计与实现（二）
+">Previous</a>
+    
+    
+      <a href="#" class="pagination--pager disabled">Next</a>
+    
+  </nav>
+
+    </div>
+
+    
+  </article>
+
+  
+  
+    
+<div class="page__related">
+  
+  <h2 class="page__related-title">You May Also Enjoy</h2>
+  <div class="grid__wrapper">
+    
+      
+      
+
+
+
+<div class="grid__item">
+  <article class="archive__item" itemscope itemtype="https://schema.org/CreativeWork">
+    
+    <h2 class="archive__item-title no_toc" itemprop="headline">
+      
+        <a href="/2024/10/02/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%BA%8C.html" rel="permalink">分布式发布订阅系统的设计与实现（二）
+</a>
+      
+    </h2>
+    
+
+  <p class="page__meta">
+    
+
+    
+
+    
+      
+      
+
+      <span class="page__meta-readtime">
+        <i class="far fa-clock" aria-hidden="true"></i>
+        
+          10 minute read
+        
+      </span>
+    
+  </p>
+
+
+    <p class="archive__item-excerpt" itemprop="description">系统架构概述
+</p>
+  </article>
+</div>
+
+    
+      
+      
+
+
+
+<div class="grid__item">
+  <article class="archive__item" itemscope itemtype="https://schema.org/CreativeWork">
+    
+    <h2 class="archive__item-title no_toc" itemprop="headline">
+      
+        <a href="/2024/10/01/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8F%91%E5%B8%83%E8%AE%A2%E9%98%85%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%B8%80.html" rel="permalink">分布式发布订阅系统的设计与实现（一）
+</a>
+      
+    </h2>
+    
+
+  <p class="page__meta">
+    
+
+    
+
+    
+      
+      
+
+      <span class="page__meta-readtime">
+        <i class="far fa-clock" aria-hidden="true"></i>
+        
+          less than 1 minute read
+        
+      </span>
+    
+  </p>
+
+
+    <p class="archive__item-excerpt" itemprop="description">引言
+</p>
+  </article>
+</div>
+
+    
+  </div>
+</div>
+
+  
+  
+</div>
+
+      
+    </div>
+
+    
+
+    <div id="footer" class="page__footer">
+      <footer>
+        <!-- start custom footer snippets -->
+
+<!-- end custom footer snippets -->
+        <div class="page__footer-follow">
+  <ul class="social-icons">
+    
+
+    
+
+    
+      <li><a href="/feed.xml"><i class="fas fa-fw fa-rss-square" aria-hidden="true"></i> Feed</a></li>
+    
+  </ul>
+</div>
+
+<div class="page__footer-copyright">&copy; 2024 <a href="https://moo611.github.io">desong的博客</a>. Powered by <a href="https://jekyllrb.com" rel="nofollow">Jekyll</a> &amp; <a href="https://mademistakes.com/work/minimal-mistakes-jekyll-theme/" rel="nofollow">Minimal Mistakes</a>.</div>
+
+      </footer>
+    </div>
+
+    
+  <script src="/assets/js/main.min.js"></script>
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
